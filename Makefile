@@ -67,17 +67,17 @@ coverage: test ## Generate and display coverage report
 
 # --- Code quality ---
 
-vet: ## Run go vet for all target platforms
-	GOOS=linux GOARCH=amd64 go vet ./...
-	GOOS=darwin GOARCH=amd64 go vet ./...
+vet: ## Run go vet (linux + darwin)
+	GOOS=linux go vet ./...
+	GOOS=darwin go vet ./...
 
-lint: golangci-lint ## Run golangci-lint for all target platforms
-	GOOS=linux GOARCH=amd64 $(GOLANGCILINT) run
-	GOOS=darwin GOARCH=amd64 $(GOLANGCILINT) run
+lint: golangci-lint ## Run golangci-lint (linux + darwin)
+	GOOS=linux $(GOLANGCILINT) run
+	GOOS=darwin $(GOLANGCILINT) run
 
 fmt: gofumpt goimports ## Format code with gofumpt and goimports
 	$(GOFMT) -l -w .
-	$(GOIMPORTS) -l -w --local 'github.com/cocoonstack/cocoon-webhook' .
+	$(GOIMPORTS) -l -w --local 'github.com/cocoonstack' .
 
 fmt-check: gofumpt goimports ## Check formatting (fails if files need formatting)
 	@test -z "$$($(GOFMT) -l .)" || { echo "Files need formatting (gofumpt):"; $(GOFMT) -l .; exit 1; }

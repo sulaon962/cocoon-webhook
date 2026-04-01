@@ -28,7 +28,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cocoonstack/cocoon-operator/pkg/k8sutil"
 	"github.com/projecteru2/core/log"
 	"github.com/projecteru2/core/types"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -36,6 +35,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/cocoonstack/cocoon-operator/pkg/k8sutil"
 )
 
 // Constants for ConfigMap name, annotation key, and toleration key used to
@@ -61,16 +62,16 @@ func main() {
 	ctx := context.Background()
 	logLevel := envOrDefault("WEBHOOK_LOG_LEVEL", "info")
 	if err := log.SetupLog(ctx, &types.ServerLogConfig{Level: logLevel}, ""); err != nil {
-		log.WithFunc("main").Fatalf(ctx, err, "setup log: %v", err)
+		log.WithFunc("main").Fatalf(ctx, err, "setup log")
 	}
 
 	config, err := k8sutil.LoadConfig()
 	if err != nil {
-		log.WithFunc("main").Fatalf(ctx, err, "k8s config: %v", err)
+		log.WithFunc("main").Fatalf(ctx, err, "load k8s config")
 	}
 	clientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
-		log.WithFunc("main").Fatalf(ctx, err, "init clientset: %v", err)
+		log.WithFunc("main").Fatalf(ctx, err, "init clientset")
 	}
 
 	certFile := envOrDefault("TLS_CERT", "/etc/cocoon/webhook/certs/tls.crt")
@@ -86,7 +87,7 @@ func main() {
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		log.WithFunc("main").Fatalf(ctx, err, "load TLS: %v", err)
+		log.WithFunc("main").Fatalf(ctx, err, "load TLS keypair")
 	}
 	server := &http.Server{
 		Addr:              ":8443",
@@ -104,12 +105,13 @@ func main() {
 	go func() {
 		log.WithFunc("main").Info(ctx, "cocoon-webhook listening on :8443")
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			log.WithFunc("main").Fatalf(ctx, err, "listen and serve: %v", err)
+			log.WithFunc("main").Fatalf(ctx, err, "listen and serve")
 		}
 	}()
 	<-ctx.Done()
-	if err := server.Shutdown(context.Background()); err != nil {
-		log.WithFunc("main").Warnf(context.Background(), "shutdown: %v", err)
+	shutdownCtx := context.Background()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.WithFunc("main").Warnf(shutdownCtx, "shutdown: %v", err)
 	}
 }
 
@@ -316,7 +318,7 @@ func checkScaleDown(ctx context.Context, req *admissionv1.AdmissionRequest, kind
 		"cocoon-webhook: scale-down blocked for cocoon %s %s/%s (%d -> %d). "+
 			"Use Hibernation CRD to suspend individual agents.",
 		kind, req.Namespace, req.Name, oldReplicas, newReplicas)
-	log.WithFunc("checkScaleDown").Infof(ctx, "validate DENY: %s", msg)
+	log.WithFunc("checkScaleDown").Warnf(ctx, "validate DENY: %s", msg)
 	return denyResponse(msg)
 }
 

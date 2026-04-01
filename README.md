@@ -55,7 +55,7 @@ See the [Makefile](Makefile) for the full list of targets (`make help`).
 
 ## Deployment
 
-The binary expects TLS certificates (configurable via `TLS_CERT` / `TLS_KEY` environment variables, defaulting to `/etc/webhook/certs/tls.crt` and `tls.key`). It listens on `:8443`.
+The binary expects TLS certificates (configurable via `TLS_CERT` / `TLS_KEY` environment variables, defaulting to `/etc/cocoon/webhook/certs/tls.crt` and `tls.key`). It listens on `:8443`.
 
 Package it behind a standard Kubernetes Deployment, Service, and MutatingWebhookConfiguration, or run it on a control-plane host if that fits your environment.
 

@@ -5,6 +5,20 @@ before:
     - go mod download
 
 builds:
+  - id: cocoon-webhook-debug
+    binary: cocoon-webhook.dbg
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -X github.com/cocoonstack/cocoon-webhook/version.REVISION={{.Commit}}
+      - -X github.com/cocoonstack/cocoon-webhook/version.VERSION={{.Env.VERSION}}
+      - -X github.com/cocoonstack/cocoon-webhook/version.BUILTAT={{.Date}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: .
+
   - id: cocoon-webhook-linux
     binary: cocoon-webhook
     env:
@@ -31,6 +45,17 @@ archives:
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end -}}
+
+  - id: debug
+    builds:
+      - cocoon-webhook-debug
+    name_template: >-
+      {{- .ProjectName }}_{{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}_debug
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
 
 checksum:
