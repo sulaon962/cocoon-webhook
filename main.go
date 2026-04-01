@@ -37,6 +37,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Constants for ConfigMap name, annotation key, and toleration key used to
+// identify and schedule cocoon VM workloads.
 const (
 	affinityConfigMap = "cocoon-vm-affinity"
 	vmNameAnnotation  = "cocoon.cis/vm-name"
@@ -44,6 +46,15 @@ const (
 )
 
 var clientset *kubernetes.Clientset
+
+// jsonPatch represents a single RFC 6902 JSON Patch operation.
+type jsonPatch struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value any    `json:"value"`
+}
+
+// --- entry point ---
 
 func main() {
 	config, err := loadKubeConfig()
@@ -93,6 +104,8 @@ func main() {
 	}
 }
 
+// --- HTTP handlers ---
+
 // handleMutate processes mutating admission requests for Pod CREATE operations.
 func handleMutate(w http.ResponseWriter, r *http.Request) {
 	review, err := decodeAdmissionReview(r)
@@ -120,6 +133,8 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, review)
 }
+
+// --- mutating admission logic ---
 
 func mutate(req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	if req.Kind.Kind != "Pod" {
@@ -216,6 +231,8 @@ func mutate(req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	}
 }
 
+// --- validating admission logic ---
+
 // validate rejects scale-down (replicas decrease) for cocoon-type Deployments
 // and StatefulSets. Agents are stateful VMs — scale-down would destroy state.
 // Use the Hibernation CRD to suspend individual agents instead.
@@ -290,6 +307,8 @@ func validateStatefulSetScale(req *admissionv1.AdmissionRequest) *admissionv1.Ad
 	return allowResponse()
 }
 
+// --- VM name derivation and slot allocation ---
+
 // deriveVMName creates a stable VM name from the pod's owner chain.
 // For Deployment pods: vk-{ns}-{deployment-name}-{slot}
 // For bare pods: vk-{ns}-{pod-name}
@@ -316,7 +335,7 @@ func deriveVMName(pod *corev1.Pod, ns, podName string) string {
 }
 
 // allocateSlot assigns a stable replica index for a Deployment pod.
-// Reads/writes the affinity ConfigMap to track slot assignments.
+// Reads the affinity ConfigMap to track slot assignments.
 func allocateSlot(ns, deployName, podName string) int {
 	ctx := context.Background()
 
@@ -363,6 +382,8 @@ func allocateSlot(ns, deployName, podName string) int {
 	// All slots occupied — allocate new.
 	return maxSlot + 1
 }
+
+// --- node lookup and selection ---
 
 func lookupVMNode(ns, vmName string) string {
 	ctx := context.Background()
@@ -414,50 +435,7 @@ func pickAnyCocoonNode() string {
 	return cocoonNodes[int(metav1.Now().UnixNano())%len(cocoonNodes)]
 }
 
-// --- helpers ---
-
-// jsonPatch represents a single RFC 6902 JSON Patch operation.
-type jsonPatch struct {
-	Op    string      `json:"op"`
-	Path  string      `json:"path"`
-	Value interface{} `json:"value"`
-}
-
-func loadKubeConfig() (*rest.Config, error) {
-	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags("", kubeconfig)
-	}
-	return rest.InClusterConfig()
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func decodeAdmissionReview(r *http.Request) (*admissionv1.AdmissionReview, error) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
-	}
-	var review admissionv1.AdmissionReview
-	if err := json.Unmarshal(body, &review); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-	return &review, nil
-}
-
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	out, err := json.Marshal(v)
-	if err != nil {
-		http.Error(w, "encode response", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(out)
-}
+// --- admission response helpers ---
 
 func allowResponse() *admissionv1.AdmissionResponse {
 	return &admissionv1.AdmissionResponse{Allowed: true}
@@ -495,6 +473,44 @@ func pickCocoonNode() *admissionv1.AdmissionResponse {
 		return allowResponse()
 	}
 	return patchNodeName(node)
+}
+
+// --- general helpers ---
+
+func loadKubeConfig() (*rest.Config, error) {
+	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+	return rest.InClusterConfig()
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func decodeAdmissionReview(r *http.Request) (*admissionv1.AdmissionReview, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	var review admissionv1.AdmissionReview
+	if err := json.Unmarshal(body, &review); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &review, nil
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	out, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, "encode response", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
 }
 
 // hasCocoonToleration checks whether a toleration list includes the cocoon
