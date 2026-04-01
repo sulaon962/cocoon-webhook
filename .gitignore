@@ -1,5 +1,7 @@
 bin/
 dist/
+cocoon-webhook
+cocoon-webhook-*
 *.out
 *.test
 coverage.out
