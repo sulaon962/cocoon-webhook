@@ -25,9 +25,10 @@ import (
 
 	"github.com/cocoonstack/cocoon-operator/k8sutil"
 	"github.com/cocoonstack/cocoon-operator/logutil"
-	"github.com/cocoonstack/cocoon-webhook/version"
 	"github.com/projecteru2/core/log"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/cocoonstack/cocoon-webhook/version"
 )
 
 func main() {

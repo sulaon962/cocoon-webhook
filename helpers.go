@@ -88,7 +88,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(out)
+	_, _ = w.Write(out) //nolint:gosec // marshaled JSON API response, not rendered as HTML
 }
 
 // hasCocoonToleration checks whether a toleration list includes the cocoon
