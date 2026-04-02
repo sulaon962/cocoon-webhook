@@ -16,7 +16,7 @@ import (
 // For Deployment pods: vk-{ns}-{deployment-name}-{slot}
 // For bare pods: vk-{ns}-{pod-name}
 func deriveVMName(ctx context.Context, pod *corev1.Pod, ns, podName string, cm *corev1.ConfigMap) string {
-	deployName := meta.DeploymentNameFromOwnerRefs(pod.OwnerReferences)
+	deployName := meta.OwnerDeploymentName(pod.OwnerReferences)
 	if deployName != "" {
 		slot, err := allocateSlot(ns, deployName, podName, cm)
 		if err == nil {
