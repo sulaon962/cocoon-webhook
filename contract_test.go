@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cocoonstack/cocoon-operator/cocoonmeta"
+	"github.com/cocoonstack/cocoon-common/meta"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -19,20 +19,20 @@ func TestDeriveVMNameMatchesSharedContract(t *testing.T) {
 		},
 	}
 	cm := &corev1.ConfigMap{Data: map[string]string{
-		cocoonmeta.VMNameForDeployment("prod", "demo", 0): "node:cocoon-a,pod:existing-pod",
+		meta.VMNameForDeployment("prod", "demo", 0): "node:cocoon-a,pod:existing-pod",
 	}}
 
-	if got := deriveVMName(context.Background(), pod, "prod", "fresh-pod", cm); got != cocoonmeta.VMNameForDeployment("prod", "demo", 1) {
+	if got := deriveVMName(context.Background(), pod, "prod", "fresh-pod", cm); got != meta.VMNameForDeployment("prod", "demo", 1) {
 		t.Fatalf("deployment vm name mismatch: got %q", got)
 	}
-	if got := deriveVMName(context.Background(), &corev1.Pod{}, "prod", "toolbox", nil); got != cocoonmeta.VMNameForPod("prod", "toolbox") {
+	if got := deriveVMName(context.Background(), &corev1.Pod{}, "prod", "toolbox", nil); got != meta.VMNameForPod("prod", "toolbox") {
 		t.Fatalf("bare pod vm name mismatch: got %q", got)
 	}
 }
 
 func TestHasCocoonTolerationMatchesSharedContract(t *testing.T) {
-	tolerations := []corev1.Toleration{{Key: cocoonmeta.TolerationKey}}
-	if got := hasCocoonToleration(tolerations); got != cocoonmeta.HasCocoonToleration(tolerations) {
+	tolerations := []corev1.Toleration{{Key: meta.TolerationKey}}
+	if got := hasCocoonToleration(tolerations); got != meta.HasCocoonToleration(tolerations) {
 		t.Fatalf("toleration contract mismatch: got %v", got)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cocoonstack/cocoon-operator/cocoonmeta"
+	"github.com/cocoonstack/cocoon-common/meta"
 	"github.com/projecteru2/core/log"
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,7 +30,7 @@ func mutate(ctx context.Context, clientset kubernetes.Interface, req *admissionv
 	}
 
 	for _, ref := range pod.OwnerReferences {
-		if ref.Kind == cocoonmeta.KindCocoonSet {
+		if ref.Kind == meta.KindCocoonSet {
 			log.WithFunc("mutate").Infof(ctx, "mutate %s/%s: owned by CocoonSet %s, skipping", req.Namespace, req.Name, ref.Name)
 			return allowResponse()
 		}

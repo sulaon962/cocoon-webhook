@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cocoonstack/cocoon-operator/cocoonmeta"
+	"github.com/cocoonstack/cocoon-common/meta"
 	"github.com/projecteru2/core/log"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -94,7 +94,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 // hasCocoonToleration checks whether a toleration list includes the cocoon
 // virtual-kubelet provider key.
 func hasCocoonToleration(tolerations []corev1.Toleration) bool {
-	return cocoonmeta.HasCocoonToleration(tolerations)
+	return meta.HasCocoonToleration(tolerations)
 }
 
 func replicaCount(p *int32) int32 {

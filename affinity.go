@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cocoonstack/cocoon-operator/cocoonmeta"
+	"github.com/cocoonstack/cocoon-common/meta"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -16,16 +16,16 @@ import (
 // For Deployment pods: vk-{ns}-{deployment-name}-{slot}
 // For bare pods: vk-{ns}-{pod-name}
 func deriveVMName(ctx context.Context, pod *corev1.Pod, ns, podName string, cm *corev1.ConfigMap) string {
-	deployName := cocoonmeta.DeploymentNameFromOwnerRefs(pod.OwnerReferences)
+	deployName := meta.DeploymentNameFromOwnerRefs(pod.OwnerReferences)
 	if deployName != "" {
 		slot, err := allocateSlot(ns, deployName, podName, cm)
 		if err == nil {
-			return cocoonmeta.VMNameForDeployment(ns, deployName, slot)
+			return meta.VMNameForDeployment(ns, deployName, slot)
 		}
 		logWarnAllocateSlot(ctx, ns, deployName, err)
 	}
 
-	return cocoonmeta.VMNameForPod(ns, podName)
+	return meta.VMNameForPod(ns, podName)
 }
 
 // allocateSlot assigns a stable replica index for a Deployment pod.
@@ -95,7 +95,7 @@ func pickAnyCocoonNode(ctx context.Context, clientset kubernetes.Interface) stri
 			continue
 		}
 		for _, taint := range n.Spec.Taints {
-			if taint.Key == cocoonmeta.TolerationKey {
+			if taint.Key == meta.TolerationKey {
 				cocoonNodes = append(cocoonNodes, n.Name)
 				break
 			}

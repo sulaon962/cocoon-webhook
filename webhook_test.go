@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/cocoonstack/cocoon-operator/cocoonmeta"
+	"github.com/cocoonstack/cocoon-common/meta"
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -111,7 +111,7 @@ func TestMutateAssignsVMNameAndNode(t *testing.T) {
 			}},
 		},
 		Spec: corev1.PodSpec{
-			Tolerations: []corev1.Toleration{{Key: cocoonmeta.TolerationKey}},
+			Tolerations: []corev1.Toleration{{Key: meta.TolerationKey}},
 		},
 	}
 	raw, err := json.Marshal(pod)
@@ -152,7 +152,7 @@ func TestValidateDeploymentScale(t *testing.T) {
 			Replicas: &oldReplicas,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					Tolerations: []corev1.Toleration{{Key: cocoonmeta.TolerationKey}},
+					Tolerations: []corev1.Toleration{{Key: meta.TolerationKey}},
 				},
 			},
 		},

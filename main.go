@@ -23,8 +23,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cocoonstack/cocoon-operator/k8sutil"
-	"github.com/cocoonstack/cocoon-operator/logutil"
+	commonk8s "github.com/cocoonstack/cocoon-common/k8s"
+	commonlog "github.com/cocoonstack/cocoon-common/log"
 	"github.com/projecteru2/core/log"
 	"k8s.io/client-go/kubernetes"
 
@@ -33,11 +33,11 @@ import (
 
 func main() {
 	ctx := context.Background()
-	logutil.Setup(ctx, "WEBHOOK_LOG_LEVEL")
+	commonlog.Setup(ctx, "WEBHOOK_LOG_LEVEL")
 
 	logger := log.WithFunc("main")
 
-	config, err := k8sutil.LoadConfig()
+	config, err := commonk8s.LoadConfig()
 	if err != nil {
 		logger.Fatalf(ctx, err, "load k8s config: %v", err)
 	}
