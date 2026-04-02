@@ -1,0 +1,131 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/projecteru2/core/log"
+	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+)
+
+// jsonPatch represents a single RFC 6902 JSON Patch operation.
+type jsonPatch struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value any    `json:"value"`
+}
+
+func allowResponse() *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{Allowed: true}
+}
+
+func denyResponse(msg string) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		Allowed: false,
+		Result:  &metav1.Status{Message: msg, Reason: metav1.StatusReasonForbidden},
+	}
+}
+
+func patchNodeName(ctx context.Context, nodeName string) *admissionv1.AdmissionResponse {
+	patches := []jsonPatch{{
+		Op:    "add",
+		Path:  "/spec/nodeName",
+		Value: nodeName,
+	}}
+	patchBytes, err := json.Marshal(patches)
+	if err != nil {
+		log.WithFunc("patchNodeName").Error(ctx, err, "marshal patches")
+		return allowResponse()
+	}
+	pt := admissionv1.PatchTypeJSONPatch
+	return &admissionv1.AdmissionResponse{
+		Allowed:   true,
+		Patch:     patchBytes,
+		PatchType: &pt,
+	}
+}
+
+func pickCocoonNode(ctx context.Context, clientset kubernetes.Interface) *admissionv1.AdmissionResponse {
+	node := pickAnyCocoonNode(ctx, clientset)
+	if node == "" {
+		return allowResponse()
+	}
+	return patchNodeName(ctx, node)
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func decodeAdmissionReview(r *http.Request) (*admissionv1.AdmissionReview, error) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	var review admissionv1.AdmissionReview
+	if err := json.Unmarshal(body, &review); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &review, nil
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	out, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, "encode response", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out)
+}
+
+// hasCocoonToleration checks whether a toleration list includes the cocoon
+// virtual-kubelet provider key.
+func hasCocoonToleration(tolerations []corev1.Toleration) bool {
+	for _, t := range tolerations {
+		if t.Key == cocoonToleration {
+			return true
+		}
+	}
+	return false
+}
+
+func replicaCount(p *int32) int32 {
+	if p != nil {
+		return *p
+	}
+	return 1
+}
+
+// parseConfigMapField extracts the value for a given key from a
+// comma-separated "key:value" string (e.g. "node:cocoon-pool,pod:xxx").
+func parseConfigMapField(data, key string) string {
+	prefix := key + ":"
+	for part := range strings.SplitSeq(data, ",") {
+		if val, ok := strings.CutPrefix(part, prefix); ok {
+			return val
+		}
+	}
+	return ""
+}
+
+func escapeJSONPointer(s string) string {
+	s = strings.ReplaceAll(s, "~", "~0")
+	s = strings.ReplaceAll(s, "/", "~1")
+	return s
+}
+
+func logWarnAllocateSlot(ctx context.Context, ns, deployName string, err error) {
+	log.WithFunc("deriveVMName").Warnf(ctx, "allocateSlot %s/%s: %v, skipping slot allocation", ns, deployName, err)
+}
