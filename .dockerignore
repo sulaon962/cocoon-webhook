@@ -1,0 +1,10 @@
+.git
+.github
+bin
+dist
+coverage.out
+coverage.html
+coverage.txt
+cocoon-webhook
+cocoon-webhook.dbg
+*.log
