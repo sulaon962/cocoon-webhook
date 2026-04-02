@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/cocoonstack/cocoon-operator/cocoonmeta"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -10,8 +11,7 @@ import (
 // identify and schedule cocoon VM workloads.
 const (
 	affinityConfigMap = "cocoon-vm-affinity"
-	vmNameAnnotation  = "cocoon.cis/vm-name"
-	cocoonToleration  = "virtual-kubelet.io/provider"
+	vmNameAnnotation  = cocoonmeta.AnnotationVMName
 )
 
 type webhookServer struct {
