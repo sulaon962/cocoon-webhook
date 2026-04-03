@@ -8,8 +8,6 @@ import (
 	"github.com/cocoonstack/cocoon-common/meta"
 )
 
-// Constants for ConfigMap name, annotation key, and toleration key used to
-// identify and schedule cocoon VM workloads.
 const (
 	affinityConfigMap = "cocoon-vm-affinity"
 	vmNameAnnotation  = meta.AnnotationVMName

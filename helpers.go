@@ -92,8 +92,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_, _ = w.Write(out) //nolint:gosec // marshaled JSON API response, not rendered as HTML
 }
 
-// hasCocoonToleration checks whether a toleration list includes the cocoon
-// virtual-kubelet provider key.
 func hasCocoonToleration(tolerations []corev1.Toleration) bool {
 	return meta.HasCocoonToleration(tolerations)
 }
