@@ -77,7 +77,7 @@ func allocateSlot(ns, deployName, podName string, cm *corev1.ConfigMap) (int, er
 	return maxSlot + 1, nil
 }
 
-func reserveAffinity(ctx context.Context, clientset kubernetes.Interface, pod *corev1.Pod, cm *corev1.ConfigMap) (string, string, error) {
+func reserveAffinity(ctx context.Context, clientset kubernetes.Interface, pod *corev1.Pod) (string, string, error) {
 	if clientset == nil {
 		return "", "", fmt.Errorf("no clientset available for affinity reservation")
 	}
@@ -88,6 +88,7 @@ func reserveAffinity(ctx context.Context, clientset kubernetes.Interface, pod *c
 	var vmName string
 	var nodeName string
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cm *corev1.ConfigMap
 		current, getErr := clientset.CoreV1().ConfigMaps(pod.Namespace).Get(ctx, affinityConfigMap, metav1.GetOptions{})
 		switch {
 		case getErr == nil:

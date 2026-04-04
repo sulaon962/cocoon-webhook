@@ -42,7 +42,7 @@ func mutate(ctx context.Context, clientset kubernetes.Interface, req *admissionv
 		return allowResponse()
 	}
 
-	vmName, nodeName, reserveErr := reserveAffinity(ctx, clientset, &pod, nil)
+	vmName, nodeName, reserveErr := reserveAffinity(ctx, clientset, &pod)
 	if reserveErr != nil {
 		// Preserve availability if the affinity store is temporarily unavailable.
 		logger.Warnf(ctx, "mutate %s/%s: affinity reservation failed: %v", req.Namespace, req.Name, reserveErr)
@@ -70,14 +70,7 @@ func mutate(ctx context.Context, clientset kubernetes.Interface, req *admissionv
 			Path:  "/spec/nodeName",
 			Value: nodeName,
 		})
-		logger.Infof(ctx, "mutate %s/%s: vm=%s -> node=%s (affinity)", req.Namespace, req.Name, vmName, nodeName)
-	} else if node := pickAnyCocoonNode(ctx, clientset); node != "" {
-		patches = append(patches, jsonPatch{
-			Op:    "add",
-			Path:  "/spec/nodeName",
-			Value: node,
-		})
-		logger.Infof(ctx, "mutate %s/%s: vm=%s -> node=%s (new, round-robin)", req.Namespace, req.Name, vmName, node)
+		logger.Infof(ctx, "mutate %s/%s: vm=%s -> node=%s", req.Namespace, req.Name, vmName, nodeName)
 	}
 
 	patchBytes, err := json.Marshal(patches)
