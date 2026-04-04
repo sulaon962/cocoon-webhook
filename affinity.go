@@ -155,7 +155,9 @@ func lookupVMNode(cm *corev1.ConfigMap, vmName string) string {
 }
 
 func pickAnyCocoonNode(ctx context.Context, clientset kubernetes.Interface) string {
-	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: "type=virtual-kubelet",
+	})
 	if err != nil {
 		return ""
 	}
