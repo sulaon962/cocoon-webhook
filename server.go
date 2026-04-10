@@ -55,12 +55,7 @@ func (s *Server) handleMutate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
-	s.serveAdmission(w, r, func(_ context.Context, review *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
-		// Subsequent commits replace this with validateWorkload which blocks
-		// destructive scale-down on cocoon Deployments / StatefulSets.
-		_ = review
-		return allowResponse()
-	})
+	s.serveAdmission(w, r, s.validateWorkload)
 }
 
 func (s *Server) handleValidateCocoonSet(w http.ResponseWriter, r *http.Request) {
