@@ -59,8 +59,12 @@ all: deps fmt lint test build ## Full pipeline: deps, fmt, lint, test, build
 
 # --- Dependencies ---
 
-deps: ## Tidy Go modules
-	go mod tidy
+deps: ## Tidy Go modules (no-op when running inside a Go workspace)
+	@if [ -z "$$(go env GOWORK)" ] || [ "$$(go env GOWORK)" = "off" ]; then \
+		go mod tidy; \
+	else \
+		echo "==> workspace mode active ($$(go env GOWORK)); skipping go mod tidy"; \
+	fi
 
 # --- Build ---
 

@@ -59,12 +59,7 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleValidateCocoonSet(w http.ResponseWriter, r *http.Request) {
-	s.serveAdmission(w, r, func(_ context.Context, review *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
-		// Subsequent commits replace this with validateCocoonSet which
-		// rejects malformed CocoonSet specs ahead of the operator.
-		_ = review
-		return allowResponse()
-	})
+	s.serveAdmission(w, r, s.validateCocoonSet)
 }
 
 // serveAdmission decodes an AdmissionReview, dispatches it to the
