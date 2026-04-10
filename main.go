@@ -1,17 +1,12 @@
-// cocoon-webhook — Admission webhook for stateful VM scheduling and protection.
+// cocoon-webhook is the cocoonstack admission webhook. It will host:
 //
-// Mutating (/mutate — Pod CREATE):
-//  1. Derives a stable VM name from the Deployment/ReplicaSet owner + replica slot
-//  2. Looks up the ConfigMap "cocoon-vm-affinity" for last-known node
-//  3. Sets pod.spec.nodeName + cocoon.cis/vm-name annotation
+//   - a mutating endpoint that pins managed pods to a stable VM name
+//     and a sticky cocoon node;
+//   - validating endpoints that block destructive scale-down on cocoon
+//     workloads and reject malformed CocoonSet specs.
 //
-// Validating (/validate — Deployment/StatefulSet UPDATE):
-//  4. Blocks scale-down for cocoon-type workloads (only scale-up allowed)
-//     Agents are stateful VMs — reducing replicas would destroy state.
-//     Use the Hibernation CRD to suspend individual agents instead.
-//
-// For pods without a Deployment owner (bare pods, StatefulSets), the
-// webhook uses the pod name directly as the VM name.
+// This file is the binary entry point. The actual handlers are wired
+// in by routes.go and live in their own per-feature files.
 package main
 
 import (
@@ -19,16 +14,21 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/projecteru2/core/log"
-	"k8s.io/client-go/kubernetes"
 
-	commonk8s "github.com/cocoonstack/cocoon-common/k8s"
 	commonlog "github.com/cocoonstack/cocoon-common/log"
 	"github.com/cocoonstack/cocoon-webhook/version"
+)
+
+const (
+	defaultCertFile = "/etc/cocoon/webhook/certs/tls.crt"
+	defaultKeyFile  = "/etc/cocoon/webhook/certs/tls.key"
+	defaultListen   = ":8443"
 )
 
 func main() {
@@ -37,26 +37,24 @@ func main() {
 
 	logger := log.WithFunc("main")
 
-	config, err := commonk8s.LoadConfig()
-	if err != nil {
-		logger.Fatalf(ctx, err, "load k8s config: %v", err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		logger.Fatalf(ctx, err, "init clientset: %v", err)
-	}
-
-	certFile := envOrDefault("TLS_CERT", "/etc/cocoon/webhook/certs/tls.crt")
-	keyFile := envOrDefault("TLS_KEY", "/etc/cocoon/webhook/certs/tls.key")
+	certFile := envOrDefault("TLS_CERT", defaultCertFile)
+	keyFile := envOrDefault("TLS_KEY", defaultKeyFile)
+	listen := envOrDefault("LISTEN_ADDR", defaultListen)
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		logger.Fatalf(ctx, err, "load TLS keypair: %v", err)
 	}
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
 	server := &http.Server{
-		Addr:              ":8443",
-		Handler:           newWebhookServer(clientset).routes(),
+		Addr:              listen,
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -68,15 +66,22 @@ func main() {
 	defer cancel()
 
 	go func() {
-		logger.Infof(ctx, "cocoon-webhook %s started (rev=%s built=%s) on :8443", version.VERSION, version.REVISION, version.BUILTAT)
+		logger.Infof(ctx, "cocoon-webhook %s started (rev=%s built=%s) on %s",
+			version.VERSION, version.REVISION, version.BUILTAT, listen)
 		if serveErr := server.ListenAndServeTLS("", ""); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 			logger.Fatalf(ctx, serveErr, "listen and serve: %v", serveErr)
 		}
 	}()
 
 	<-ctx.Done()
-	shutdownCtx := context.Background()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		logger.Warnf(shutdownCtx, "shutdown: %v", err)
+	if err := server.Shutdown(context.Background()); err != nil {
+		logger.Warnf(ctx, "shutdown: %v", err)
 	}
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
