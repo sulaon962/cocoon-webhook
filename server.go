@@ -17,11 +17,12 @@ const maxAdmissionBody = 10 << 20 // 10 MiB upper bound on request body size.
 // injected so each handler stays trivially testable.
 type Server struct {
 	clientset kubernetes.Interface
+	affinity  AffinityStore
 }
 
 // NewServer constructs a Server with the supplied dependencies.
-func NewServer(clientset kubernetes.Interface) *Server {
-	return &Server{clientset: clientset}
+func NewServer(clientset kubernetes.Interface, affinity AffinityStore) *Server {
+	return &Server{clientset: clientset, affinity: affinity}
 }
 
 // Routes returns the HTTP handler exposing every webhook endpoint.

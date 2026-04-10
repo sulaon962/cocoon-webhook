@@ -57,9 +57,11 @@ func main() {
 		logger.Fatalf(ctx, err, "build clientset: %v", err)
 	}
 
+	affinityStore := NewConfigMapStore(clientset, nil)
+
 	server := &http.Server{
 		Addr:              listen,
-		Handler:           NewServer(clientset).Routes(),
+		Handler:           NewServer(clientset, affinityStore).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
