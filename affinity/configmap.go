@@ -1,4 +1,4 @@
-package main
+package affinity
 
 import (
 	"context"
@@ -18,10 +18,10 @@ import (
 	"github.com/cocoonstack/cocoon-common/meta"
 )
 
-// ConfigMapStore is an AffinityStore backed by one ConfigMap per
-// cocoon node pool. Each entry is keyed by "<namespace>/<deployment>/<slot>"
-// and the value is a JSON-encoded Reservation. RetryOnConflict
-// guards concurrent webhook replicas racing on the same ConfigMap.
+// ConfigMapStore is a Store backed by one ConfigMap per cocoon node
+// pool. Each entry is keyed by "<namespace>/<deployment>/<slot>" and
+// the value is a JSON-encoded Reservation. RetryOnConflict guards
+// concurrent webhook replicas racing on the same ConfigMap.
 type ConfigMapStore struct {
 	Client kubernetes.Interface
 	Picker NodePicker
@@ -123,7 +123,7 @@ func (s *ConfigMapStore) Release(ctx context.Context, pool, namespace, deploymen
 
 // List returns every reservation currently stored for the pool.
 func (s *ConfigMapStore) List(ctx context.Context, pool string) ([]Reservation, error) {
-	cm, err := s.Client.CoreV1().ConfigMaps(affinitySystemNamespace).Get(ctx, affinityConfigMapName(pool), metav1.GetOptions{})
+	cm, err := s.Client.CoreV1().ConfigMaps(systemNamespace).Get(ctx, configMapName(pool), metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil, nil
 	}
@@ -144,8 +144,8 @@ func (s *ConfigMapStore) List(ctx context.Context, pool string) ([]Reservation, 
 }
 
 func (s *ConfigMapStore) fetchOrInitConfigMap(ctx context.Context, pool string) (*corev1.ConfigMap, bool, error) {
-	name := affinityConfigMapName(pool)
-	cm, err := s.Client.CoreV1().ConfigMaps(affinitySystemNamespace).Get(ctx, name, metav1.GetOptions{})
+	name := configMapName(pool)
+	cm, err := s.Client.CoreV1().ConfigMaps(systemNamespace).Get(ctx, name, metav1.GetOptions{})
 	switch {
 	case err == nil:
 		if cm.Data == nil {
@@ -156,7 +156,7 @@ func (s *ConfigMapStore) fetchOrInitConfigMap(ctx context.Context, pool string) 
 		return &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
-				Namespace: affinitySystemNamespace,
+				Namespace: systemNamespace,
 				Labels: map[string]string{
 					meta.LabelManagedBy: "cocoon-webhook",
 					meta.LabelNodePool:  pool,
@@ -170,7 +170,7 @@ func (s *ConfigMapStore) fetchOrInitConfigMap(ctx context.Context, pool string) 
 }
 
 func (s *ConfigMapStore) persist(ctx context.Context, cm *corev1.ConfigMap, isNew bool) error {
-	cms := s.Client.CoreV1().ConfigMaps(affinitySystemNamespace)
+	cms := s.Client.CoreV1().ConfigMaps(systemNamespace)
 	if isNew {
 		if _, err := cms.Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 			if apierrors.IsAlreadyExists(err) {

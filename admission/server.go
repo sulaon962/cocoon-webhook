@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/projecteru2/core/log"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/cocoonstack/cocoon-webhook/affinity"
 )
 
 const maxAdmissionBody = 10 << 20 // 10 MiB upper bound on request body size.
@@ -17,12 +19,12 @@ const maxAdmissionBody = 10 << 20 // 10 MiB upper bound on request body size.
 // injected so each handler stays trivially testable.
 type Server struct {
 	clientset kubernetes.Interface
-	affinity  AffinityStore
+	affinity  affinity.Store
 }
 
 // NewServer constructs a Server with the supplied dependencies.
-func NewServer(clientset kubernetes.Interface, affinity AffinityStore) *Server {
-	return &Server{clientset: clientset, affinity: affinity}
+func NewServer(clientset kubernetes.Interface, store affinity.Store) *Server {
+	return &Server{clientset: clientset, affinity: store}
 }
 
 // Routes returns the HTTP handler exposing every webhook endpoint.

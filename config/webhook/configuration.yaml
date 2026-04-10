@@ -59,7 +59,7 @@ webhooks:
     timeoutSeconds: 5
     rules:
       - apiGroups: ["cocoonset.cocoonstack.io"]
-        apiVersions: ["v1alpha1"]
+        apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["cocoonsets"]
         scope: Namespaced

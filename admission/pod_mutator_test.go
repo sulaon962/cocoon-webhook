@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/cocoonstack/cocoon-common/meta"
+	"github.com/cocoonstack/cocoon-webhook/affinity"
 )
 
 func TestPodNodePoolPrecedence(t *testing.T) {
@@ -82,7 +83,7 @@ func TestEscapeJSONPointer(t *testing.T) {
 
 func TestBuildMutatePatchAddsAnnotationsMap(t *testing.T) {
 	pod := &corev1.Pod{}
-	res := Reservation{VMName: "vk-ns-demo-0", Node: "node-a"}
+	res := affinity.Reservation{VMName: "vk-ns-demo-0", Node: "node-a"}
 	patch, err := buildMutatePatch(pod, res)
 	if err != nil {
 		t.Fatalf("buildMutatePatch: %v", err)
@@ -104,7 +105,7 @@ func TestBuildMutatePatchAddsAnnotationsMap(t *testing.T) {
 
 func TestBuildMutatePatchSkipsNodeWhenEmpty(t *testing.T) {
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"x": "y"}}}
-	res := Reservation{VMName: "vk-ns-demo-0", Node: ""}
+	res := affinity.Reservation{VMName: "vk-ns-demo-0", Node: ""}
 	patch, err := buildMutatePatch(pod, res)
 	if err != nil {
 		t.Fatalf("buildMutatePatch: %v", err)
@@ -186,10 +187,20 @@ func TestMutatePodPatchesCocoonPod(t *testing.T) {
 	}
 }
 
+// fixedNodePicker is a NodePicker test helper local to the admission
+// package. The affinity package has its own copy under _test.go that
+// cannot be imported across packages, so we duplicate the trivial
+// four-line type rather than expose a test helper from production.
+type fixedNodePicker string
+
+func (n fixedNodePicker) Pick(_ context.Context, _ string) (string, error) {
+	return string(n), nil
+}
+
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	client := fake.NewSimpleClientset()
-	store := NewConfigMapStore(client, fixedNodePicker("node-test"))
+	store := affinity.NewConfigMapStore(client, fixedNodePicker("node-test"))
 	return NewServer(client, store)
 }
 

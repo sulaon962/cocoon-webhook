@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/cocoonstack/cocoon-common/meta"
+	"github.com/cocoonstack/cocoon-webhook/affinity"
+	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
 
 const (
@@ -29,35 +31,35 @@ func (s *Server) mutatePod(ctx context.Context, review *admissionv1.AdmissionRev
 	req := review.Request
 
 	if req.Kind.Kind != "Pod" {
-		recordAdmission(HandlerMutate, DecisionAllow)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
 		return allowResponse()
 	}
 
 	var pod corev1.Pod
 	if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
 		logger.Warnf(ctx, "decode pod %s/%s: %v", req.Namespace, req.Name, err)
-		recordAdmission(HandlerMutate, DecisionError)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionError)
 		return allowResponse()
 	}
 
 	if !meta.HasCocoonToleration(pod.Spec.Tolerations) {
-		recordAdmission(HandlerMutate, DecisionAllow)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
 		return allowResponse()
 	}
 
 	if meta.IsOwnedByCocoonSet(pod.OwnerReferences) {
 		// CocoonSet-managed pods come pre-annotated by the operator.
-		recordAdmission(HandlerMutate, DecisionAllow)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
 		return allowResponse()
 	}
 
 	if pod.Spec.NodeName != "" {
-		recordAdmission(HandlerMutate, DecisionAllow)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
 		return allowResponse()
 	}
 
 	pool := podNodePool(&pod)
-	res, err := s.affinity.Reserve(ctx, ReserveRequest{
+	res, err := s.affinity.Reserve(ctx, affinity.ReserveRequest{
 		Pool:       pool,
 		Namespace:  req.Namespace,
 		Deployment: meta.OwnerDeploymentName(pod.OwnerReferences),
@@ -67,20 +69,20 @@ func (s *Server) mutatePod(ctx context.Context, review *admissionv1.AdmissionRev
 		// Preserve cluster availability if the affinity store is
 		// unreachable: log loudly and let the pod through unmutated.
 		logger.Errorf(ctx, err, "reserve affinity for pod %s/%s", req.Namespace, podDisplayName(&pod, req))
-		recordAdmission(HandlerMutate, DecisionAffinityFailed)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAffinityFailed)
 		return allowResponse()
 	}
-	recordReservation(pool)
+	metrics.RecordReservation(pool)
 
 	patch, err := buildMutatePatch(&pod, res)
 	if err != nil {
 		logger.Errorf(ctx, err, "build mutate patch for pod %s/%s", req.Namespace, podDisplayName(&pod, req))
-		recordAdmission(HandlerMutate, DecisionError)
+		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionError)
 		return allowResponse()
 	}
 
 	logger.Infof(ctx, "mutate %s/%s: vm=%s node=%s", req.Namespace, podDisplayName(&pod, req), res.VMName, res.Node)
-	recordAdmission(HandlerMutate, DecisionAllow)
+	metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
 
 	pt := admissionv1.PatchTypeJSONPatch
 	return &admissionv1.AdmissionResponse{
@@ -122,7 +124,7 @@ func podNodePool(pod *corev1.Pod) string {
 
 // buildMutatePatch produces an RFC 6902 JSON patch that writes the
 // VM name annotation and (when present) pins spec.nodeName.
-func buildMutatePatch(pod *corev1.Pod, res Reservation) ([]byte, error) {
+func buildMutatePatch(pod *corev1.Pod, res affinity.Reservation) ([]byte, error) {
 	var ops []jsonPatchOp
 	if pod.Annotations == nil {
 		ops = append(ops, jsonPatchOp{

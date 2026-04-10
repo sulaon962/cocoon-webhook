@@ -5,8 +5,9 @@
 //   - validating endpoints that block destructive scale-down on cocoon
 //     workloads and reject malformed CocoonSet specs.
 //
-// This file is the binary entry point. The actual handlers are wired
-// in by routes.go and live in their own per-feature files.
+// This file is the binary entry point. The handlers themselves live
+// in the admission package; affinity bookkeeping in the affinity
+// package; prometheus collectors in the metrics package.
 package main
 
 import (
@@ -25,6 +26,9 @@ import (
 
 	commonk8s "github.com/cocoonstack/cocoon-common/k8s"
 	commonlog "github.com/cocoonstack/cocoon-common/log"
+	"github.com/cocoonstack/cocoon-webhook/admission"
+	"github.com/cocoonstack/cocoon-webhook/affinity"
+	"github.com/cocoonstack/cocoon-webhook/metrics"
 	"github.com/cocoonstack/cocoon-webhook/version"
 )
 
@@ -56,7 +60,7 @@ func main() {
 
 	logger := log.WithFunc("main")
 
-	RegisterMetrics(prometheus.DefaultRegisterer)
+	metrics.Register(prometheus.DefaultRegisterer)
 
 	certFile := envOrDefault("TLS_CERT", defaultCertFile)
 	keyFile := envOrDefault("TLS_KEY", defaultKeyFile)
@@ -77,15 +81,15 @@ func main() {
 		logger.Fatalf(ctx, err, "build clientset: %v", err)
 	}
 
-	picker := NewLeastUsedPicker(clientset)
-	affinityStore := NewConfigMapStore(clientset, picker)
-	reaper := NewReaper(affinityStore, clientset)
+	picker := affinity.NewLeastUsedPicker(clientset)
+	affinityStore := affinity.NewConfigMapStore(clientset, picker)
+	reaper := affinity.NewReaper(affinityStore, clientset)
 	reaper.Interval = envDuration("REAPER_INTERVAL", reaper.Interval)
 	reaper.Grace = envDuration("REAPER_GRACE", reaper.Grace)
 
 	server := &http.Server{
 		Addr:              listen,
-		Handler:           NewServer(clientset, affinityStore).Routes(),
+		Handler:           admission.NewServer(clientset, affinityStore).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -99,7 +103,7 @@ func main() {
 	go reaper.Run(ctx)
 
 	metricsMux := http.NewServeMux()
-	metricsMux.Handle("/metrics", metricsHandler())
+	metricsMux.Handle("/metrics", metrics.Handler())
 	metricsServer := &http.Server{
 		Addr:              metricsListen,
 		Handler:           metricsMux,

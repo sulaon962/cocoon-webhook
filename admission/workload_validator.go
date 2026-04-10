@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/cocoonstack/cocoon-common/meta"
+	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
 
 // scalable is the small subset of appsv1.Deployment / appsv1.StatefulSet
@@ -83,7 +84,7 @@ func workloadShape[T scalable](obj *T) (int32, []corev1.Toleration) {
 // checkScaleDown denies the request if newReplicas < oldReplicas.
 func checkScaleDown(ctx context.Context, req *admissionv1.AdmissionRequest, kind string, oldReplicas, newReplicas int32) *admissionv1.AdmissionResponse {
 	if newReplicas >= oldReplicas {
-		recordAdmission(HandlerValidate, DecisionAllow)
+		metrics.RecordAdmission(metrics.HandlerValidate, metrics.DecisionAllow)
 		return allowResponse()
 	}
 	msg := fmt.Sprintf(
@@ -91,7 +92,7 @@ func checkScaleDown(ctx context.Context, req *admissionv1.AdmissionRequest, kind
 			"Use a CocoonHibernation CR to suspend individual agents.",
 		kind, req.Namespace, req.Name, oldReplicas, newReplicas)
 	log.WithFunc("checkScaleDown").Warn(ctx, msg)
-	recordAdmission(HandlerValidate, DecisionDeny)
+	metrics.RecordAdmission(metrics.HandlerValidate, metrics.DecisionDeny)
 	return denyResponse(msg)
 }
 

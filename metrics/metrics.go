@@ -1,4 +1,4 @@
-package main
+package metrics
 
 import (
 	"net/http"
@@ -58,31 +58,31 @@ var (
 	)
 )
 
-// RegisterMetrics installs the collectors against the supplied
-// registry. Tests pass an isolated registry; production code calls
-// this once from main with prometheus.DefaultRegisterer.
-func RegisterMetrics(reg prometheus.Registerer) {
+// Register installs the collectors against the supplied registry.
+// Tests pass an isolated registry; production code calls this once
+// from main with prometheus.DefaultRegisterer.
+func Register(reg prometheus.Registerer) {
 	reg.MustRegister(admissionTotal, affinityReservations, affinityReleases)
 }
 
-// metricsHandler returns the HTTP handler that exposes the
-// prometheus collectors. It is mounted on its own listener so the
-// admission TLS port stays focused on AdmissionReview traffic.
-func metricsHandler() http.Handler {
+// Handler returns the HTTP handler that exposes the prometheus
+// collectors. It is mounted on its own listener so the admission TLS
+// port stays focused on AdmissionReview traffic.
+func Handler() http.Handler {
 	return promhttp.Handler()
 }
 
-// recordAdmission increments the admission counter.
-func recordAdmission(handler, decision string) {
+// RecordAdmission increments the admission counter.
+func RecordAdmission(handler, decision string) {
 	admissionTotal.WithLabelValues(handler, decision).Inc()
 }
 
-// recordReservation increments the per-pool reservation counter.
-func recordReservation(pool string) {
+// RecordReservation increments the per-pool reservation counter.
+func RecordReservation(pool string) {
 	affinityReservations.WithLabelValues(pool).Inc()
 }
 
-// recordRelease increments the per-pool release counter.
-func recordRelease(pool string) {
+// RecordRelease increments the per-pool release counter.
+func RecordRelease(pool string) {
 	affinityReleases.WithLabelValues(pool).Inc()
 }

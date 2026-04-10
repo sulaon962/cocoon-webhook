@@ -1,4 +1,4 @@
-package main
+package affinity
 
 import (
 	"context"
@@ -6,21 +6,21 @@ import (
 )
 
 const (
-	// affinitySystemNamespace is where every per-pool affinity
-	// ConfigMap lives. The webhook deployment must have RBAC for
-	// configmaps in this namespace.
-	affinitySystemNamespace = "cocoon-system"
+	// systemNamespace is where every per-pool affinity ConfigMap
+	// lives. The webhook deployment must have RBAC for configmaps in
+	// this namespace.
+	systemNamespace = "cocoon-system"
 
-	// affinityConfigMapPrefix prefixes the per-pool ConfigMap name.
-	// The pool name is appended verbatim, so cocoonstack.io/pool=gpu
-	// becomes "cocoon-affinity-gpu".
-	affinityConfigMapPrefix = "cocoon-affinity-"
+	// configMapPrefix prefixes the per-pool ConfigMap name. The pool
+	// name is appended verbatim, so cocoonstack.io/pool=gpu becomes
+	// "cocoon-affinity-gpu".
+	configMapPrefix = "cocoon-affinity-"
 )
 
-// affinityConfigMapName returns the ConfigMap name that stores
-// reservations for the given cocoon node pool.
-func affinityConfigMapName(pool string) string {
-	return affinityConfigMapPrefix + pool
+// configMapName returns the ConfigMap name that stores reservations
+// for the given cocoon node pool.
+func configMapName(pool string) string {
+	return configMapPrefix + pool
 }
 
 // Reservation is one row in the affinity store: a deployment slot
@@ -37,19 +37,19 @@ type Reservation struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
-// AffinityStore persists slot-and-node assignments per cocoon node
-// pool. Reserve allocates (or reuses) a slot for a deployment pod and
-// pins it to a node; Release frees a slot; List returns every
-// reservation in the pool for cleanup or inspection.
-type AffinityStore interface {
+// Store persists slot-and-node assignments per cocoon node pool.
+// Reserve allocates (or reuses) a slot for a deployment pod and pins
+// it to a node; Release frees a slot; List returns every reservation
+// in the pool for cleanup or inspection.
+type Store interface {
 	Reserve(ctx context.Context, req ReserveRequest) (Reservation, error)
 	Release(ctx context.Context, pool, namespace, deployment string, slot int) error
 	List(ctx context.Context, pool string) ([]Reservation, error)
 }
 
-// ReserveRequest is the input to AffinityStore.Reserve. The fields
-// describe enough about the incoming pod that the store can pick a
-// stable slot, derive a VM name, and choose a node from the pool.
+// ReserveRequest is the input to Store.Reserve. The fields describe
+// enough about the incoming pod that the store can pick a stable
+// slot, derive a VM name, and choose a node from the pool.
 type ReserveRequest struct {
 	Pool       string
 	Namespace  string

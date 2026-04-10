@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	cocoonv1 "github.com/cocoonstack/cocoon-common/apis/v1alpha1"
+	cocoonv1 "github.com/cocoonstack/cocoon-common/apis/v1"
 )
 
 func TestValidateCocoonSetSpecAcceptsMinimal(t *testing.T) {

@@ -1,4 +1,4 @@
-package main
+package affinity
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/cocoonstack/cocoon-common/meta"
+	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 // Reaper periodically scans every per-pool affinity ConfigMap and
 // releases reservations whose backing pod no longer exists.
 type Reaper struct {
-	Store    AffinityStore
+	Store    Store
 	Client   kubernetes.Interface
 	Interval time.Duration
 	Grace    time.Duration
@@ -35,7 +36,7 @@ type Reaper struct {
 
 // NewReaper constructs a Reaper with sensible defaults filled in for
 // any zero-valued field.
-func NewReaper(store AffinityStore, client kubernetes.Interface) *Reaper {
+func NewReaper(store Store, client kubernetes.Interface) *Reaper {
 	return &Reaper{
 		Store:    store,
 		Client:   client,
@@ -92,7 +93,7 @@ func (r *Reaper) reapOnce(ctx context.Context) error {
 				logger.Warnf(ctx, "release %s/%s slot %d: %v", entry.Namespace, entry.Deployment, entry.Slot, err)
 				continue
 			}
-			recordRelease(entry.Pool)
+			metrics.RecordRelease(entry.Pool)
 			logger.Infof(ctx, "released orphan reservation pool=%s ns=%s deploy=%s slot=%d pod=%s",
 				entry.Pool, entry.Namespace, entry.Deployment, entry.Slot, entry.Pod)
 		}
@@ -103,7 +104,7 @@ func (r *Reaper) reapOnce(ctx context.Context) error {
 // discoverPools lists every per-pool ConfigMap in the cocoon system
 // namespace by label and returns the pool names.
 func (r *Reaper) discoverPools(ctx context.Context) ([]string, error) {
-	cms, err := r.Client.CoreV1().ConfigMaps(affinitySystemNamespace).List(ctx, metav1.ListOptions{
+	cms, err := r.Client.CoreV1().ConfigMaps(systemNamespace).List(ctx, metav1.ListOptions{
 		LabelSelector: meta.LabelManagedBy + "=cocoon-webhook",
 	})
 	if err != nil {

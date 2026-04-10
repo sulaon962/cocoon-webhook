@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	"context"
@@ -10,7 +10,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
-	cocoonv1 "github.com/cocoonstack/cocoon-common/apis/v1alpha1"
+	cocoonv1 "github.com/cocoonstack/cocoon-common/apis/v1"
+	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
 
 // validateCocoonSet is the admission entry point for CocoonSet
@@ -34,10 +35,10 @@ func (s *Server) validateCocoonSet(ctx context.Context, review *admissionv1.Admi
 	if errs := validateCocoonSetSpec(&cs); len(errs) > 0 {
 		msg := "cocoon-webhook: invalid CocoonSet spec: " + strings.Join(errs, "; ")
 		logger.Warnf(ctx, "validate %s/%s DENY: %s", req.Namespace, req.Name, msg)
-		recordAdmission(HandlerCocoonSetValid, DecisionDeny)
+		metrics.RecordAdmission(metrics.HandlerCocoonSetValid, metrics.DecisionDeny)
 		return denyResponse(msg)
 	}
-	recordAdmission(HandlerCocoonSetValid, DecisionAllow)
+	metrics.RecordAdmission(metrics.HandlerCocoonSetValid, metrics.DecisionAllow)
 	return allowResponse()
 }
 

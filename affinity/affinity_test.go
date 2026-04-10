@@ -1,4 +1,4 @@
-package main
+package affinity
 
 import (
 	"context"
@@ -115,7 +115,7 @@ func TestConfigMapStoreReserveCreatesNewConfigMap(t *testing.T) {
 		t.Errorf("slot: %d", res.Slot)
 	}
 
-	cm, err := client.CoreV1().ConfigMaps(affinitySystemNamespace).Get(context.Background(), affinityConfigMapName("default"), metav1.GetOptions{})
+	cm, err := client.CoreV1().ConfigMaps(systemNamespace).Get(context.Background(), configMapName("default"), metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get cm: %v", err)
 	}
@@ -258,8 +258,8 @@ var _ = recentReservation
 
 // Sanity check that the fake client behaves the way the test pattern assumes.
 func TestFakeClientsetSanity(t *testing.T) {
-	client := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: affinitySystemNamespace}})
-	_, err := client.CoreV1().Namespaces().Get(context.Background(), affinitySystemNamespace, metav1.GetOptions{})
+	client := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: systemNamespace}})
+	_, err := client.CoreV1().Namespaces().Get(context.Background(), systemNamespace, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("fake clientset namespace lookup: %v", err)
 	}

@@ -1,4 +1,4 @@
-package main
+package admission
 
 import (
 	admissionv1 "k8s.io/api/admission/v1"
