@@ -51,12 +51,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleMutate(w http.ResponseWriter, r *http.Request) {
-	s.serveAdmission(w, r, func(_ context.Context, review *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
-		// Subsequent commits replace this with mutatePod which writes the
-		// VMSpec contract and pins the pod to a sticky cocoon node.
-		_ = review
-		return allowResponse()
-	})
+	s.serveAdmission(w, r, s.mutatePod)
 }
 
 func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
