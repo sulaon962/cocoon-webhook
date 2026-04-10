@@ -25,6 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/env"
 
 	commonk8s "github.com/cocoonstack/cocoon-common/k8s"
@@ -93,12 +94,21 @@ func main() {
 
 	// Shared informer factory: pod and node informers feed both the
 	// admission hot path (LeastUsedPicker) and the background reaper.
-	// Calling Lister() registers each informer with the factory.
 	informerFactory := informers.NewSharedInformerFactory(clientset, informerResync)
+
+	// Register the byNode index before starting the factory so the
+	// picker can look up pods by spec.nodeName in O(pods-on-node)
+	// instead of scanning every pod in the cluster.
+	podInformer := informerFactory.Core().V1().Pods().Informer()
+	if err := podInformer.AddIndexers(cache.Indexers{
+		affinity.ByNodeIndex: affinity.NodeNameIndexFunc,
+	}); err != nil {
+		logger.Fatalf(ctx, err, "add pod byNode indexer: %v", err)
+	}
 	podLister := informerFactory.Core().V1().Pods().Lister()
 	nodeLister := informerFactory.Core().V1().Nodes().Lister()
 
-	picker := affinity.NewLeastUsedPicker(podLister, nodeLister)
+	picker := affinity.NewLeastUsedPicker(podInformer.GetIndexer(), nodeLister)
 	affinityStore := affinity.NewConfigMapStore(clientset, picker)
 	reaper := affinity.NewReaper(affinityStore, clientset, podLister)
 	reaper.Interval = envDuration("REAPER_INTERVAL", reaper.Interval)

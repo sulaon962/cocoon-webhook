@@ -1,9 +1,10 @@
 package affinity
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -11,6 +12,31 @@ import (
 
 	"github.com/cocoonstack/cocoon-common/meta"
 )
+
+// ByNodeIndex is the informer-cache index name used to look up pods
+// by spec.nodeName. Registered once in main before the factory starts.
+const ByNodeIndex = "byNode"
+
+// NodeNameIndexFunc is the cache.IndexFunc for ByNodeIndex.
+// Pass it to podInformer.AddIndexers so the LeastUsedPicker can
+// look up pods by spec.nodeName.
+func NodeNameIndexFunc(obj any) ([]string, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, nil
+	}
+	if pod.Spec.NodeName == "" {
+		return nil, nil
+	}
+	return []string{pod.Spec.NodeName}, nil
+}
+
+// PodIndexer looks up pods by the node they are scheduled on.
+// The informer's ByIndex method satisfies this when wired to the
+// ByNodeIndex indexer registered at startup.
+type PodIndexer interface {
+	ByIndex(indexName, indexedValue string) ([]any, error)
+}
 
 var _ NodePicker = (*LeastUsedPicker)(nil)
 
@@ -23,7 +49,7 @@ var _ NodePicker = (*LeastUsedPicker)(nil)
 // scans rather than two apiserver round trips on the admission hot
 // path.
 type LeastUsedPicker struct {
-	PodLister  corelisters.PodLister
+	PodIndexer PodIndexer
 	NodeLister corelisters.NodeLister
 }
 
@@ -31,8 +57,8 @@ type LeastUsedPicker struct {
 // the supplied informer-backed listers. Callers are responsible for
 // starting the informer factory and waiting for cache sync before
 // calling Pick.
-func NewLeastUsedPicker(pods corelisters.PodLister, nodes corelisters.NodeLister) *LeastUsedPicker {
-	return &LeastUsedPicker{PodLister: pods, NodeLister: nodes}
+func NewLeastUsedPicker(pods PodIndexer, nodes corelisters.NodeLister) *LeastUsedPicker {
+	return &LeastUsedPicker{PodIndexer: pods, NodeLister: nodes}
 }
 
 // Pick returns the name of the cocoon node in the pool that has the
@@ -41,7 +67,7 @@ func NewLeastUsedPicker(pods corelisters.PodLister, nodes corelisters.NodeLister
 // scheduler decide".
 func (p *LeastUsedPicker) Pick(_ context.Context, pool string) (string, error) {
 	if pool == "" {
-		return "", fmt.Errorf("pool is required")
+		return "", fmt.Errorf("pick node: pool must not be empty")
 	}
 
 	poolSelector := labels.SelectorFromSet(labels.Set{meta.LabelNodePool: pool})
@@ -58,12 +84,11 @@ func (p *LeastUsedPicker) Pick(_ context.Context, pool string) (string, error) {
 		return "", err
 	}
 
-	sort.SliceStable(nodes, func(i, j int) bool {
-		ci, cj := counts[nodes[i].Name], counts[nodes[j].Name]
-		if ci != cj {
-			return ci < cj
-		}
-		return nodes[i].Name < nodes[j].Name
+	slices.SortStableFunc(nodes, func(a, b *corev1.Node) int {
+		return cmp.Or(
+			cmp.Compare(counts[a.Name], counts[b.Name]),
+			cmp.Compare(a.Name, b.Name),
+		)
 	})
 	return nodes[0].Name, nil
 }
@@ -72,27 +97,28 @@ func (p *LeastUsedPicker) Pick(_ context.Context, pool string) (string, error) {
 // candidate node. Excluded: pods in Succeeded / Failed phases (they
 // no longer consume capacity).
 //
-// The PodLister.List(labels.Everything()) call walks the informer's
-// in-memory cache — no apiserver round trip — so this is cheap on
-// the hot path.
+// Each lookup is O(pods-on-that-node) via the ByNodeIndex informer
+// index, so the total cost is proportional to the pods on the
+// candidate nodes — not every pod in the cluster.
 func (p *LeastUsedPicker) podsPerNode(nodes []*corev1.Node) (map[string]int, error) {
 	counts := make(map[string]int, len(nodes))
 	for _, n := range nodes {
-		counts[n.Name] = 0
-	}
-
-	pods, err := p.PodLister.List(labels.Everything())
-	if err != nil {
-		return nil, fmt.Errorf("list pods from cache: %w", err)
-	}
-	for _, pod := range pods {
-		if _, ok := counts[pod.Spec.NodeName]; !ok {
-			continue
+		objs, err := p.PodIndexer.ByIndex(ByNodeIndex, n.Name)
+		if err != nil {
+			return nil, fmt.Errorf("index lookup for node %s: %w", n.Name, err)
 		}
-		if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-			continue
+		live := 0
+		for _, obj := range objs {
+			pod, ok := obj.(*corev1.Pod)
+			if !ok {
+				continue
+			}
+			if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+				continue
+			}
+			live++
 		}
-		counts[pod.Spec.NodeName]++
+		counts[n.Name] = live
 	}
 	return counts, nil
 }

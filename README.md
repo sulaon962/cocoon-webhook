@@ -57,6 +57,8 @@ The CRD ships with `+kubebuilder` enum / required / default markers, but the web
 | `TLS_KEY` | `/etc/cocoon/webhook/certs/tls.key` | TLS server private key |
 | `LISTEN_ADDR` | `:8443` | Admission listener (HTTPS) |
 | `METRICS_ADDR` | `:9090` | Prometheus listener (HTTP) |
+| `REAPER_INTERVAL` | `5m` | How often the reaper sweeps affinity ConfigMaps for orphan reservations |
+| `REAPER_GRACE` | `30m` | How long an orphan reservation is kept before release |
 
 ## Installation
 
