@@ -205,12 +205,16 @@ func (s *ConfigMapStore) persist(ctx context.Context, cm *corev1.ConfigMap, isNe
 }
 
 // reservationKey is the per-entry key used inside the ConfigMap data
-// map. Bare pods omit the deployment segment.
+// map. Bare pods substitute "_pod" for the deployment segment. The
+// segments are joined with "." (not "/") because ConfigMap data keys
+// must match `[-._a-zA-Z0-9]+` and `/` is rejected by the apiserver.
+// Namespaces and workload names are RFC 1123 labels and cannot
+// contain ".", so the separator is unambiguous.
 func reservationKey(namespace, deployment string, slot int) string {
 	if deployment == "" {
-		return namespace + "/_pod/" + strconv.Itoa(slot)
+		return namespace + "._pod." + strconv.Itoa(slot)
 	}
-	return namespace + "/" + deployment + "/" + strconv.Itoa(slot)
+	return namespace + "." + deployment + "." + strconv.Itoa(slot)
 }
 
 // decodeReservations parses every entry of a ConfigMap into a slice

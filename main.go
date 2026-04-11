@@ -99,7 +99,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              listen,
-		Handler:           admission.NewServer(affinityStore).Routes(),
+		Handler:           admission.NewServer(affinityStore, clientset).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},

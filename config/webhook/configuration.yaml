@@ -41,10 +41,19 @@ webhooks:
     failurePolicy: Fail
     timeoutSeconds: 5
     rules:
+      # `deployments` / `statefulsets` covers `kubectl edit`, `kubectl patch`,
+      # and direct PUT/PATCH on the parent. `kubectl scale --replicas=N`
+      # writes to the `/scale` subresource and bypasses the parent rule, so
+      # `deployments/scale` and `statefulsets/scale` must be listed
+      # explicitly to catch that path.
       - apiGroups: ["apps"]
         apiVersions: ["v1"]
         operations: ["UPDATE"]
-        resources: ["deployments", "statefulsets"]
+        resources:
+          - deployments
+          - statefulsets
+          - deployments/scale
+          - statefulsets/scale
         scope: Namespaced
     clientConfig:
       service:

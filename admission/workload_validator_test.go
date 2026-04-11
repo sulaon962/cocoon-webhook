@@ -6,11 +6,14 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/cocoonstack/cocoon-common/meta"
+	"github.com/cocoonstack/cocoon-webhook/affinity"
 )
 
 func TestCheckScaleDownAllowsScaleUp(t *testing.T) {
@@ -80,6 +83,96 @@ func TestServerValidateWorkloadIgnoresCreate(t *testing.T) {
 	resp := srv.validateWorkload(t.Context(), review)
 	if !resp.Allowed {
 		t.Errorf("CREATE operation should pass through")
+	}
+}
+
+func TestServerValidateWorkloadDeploymentScaleSubresourceDenied(t *testing.T) {
+	srv := newServerWithObjects(t, newDeployment(5, true))
+	review := buildScaleReview(t, "deployments", 5, 2)
+	resp := srv.validateWorkload(t.Context(), review)
+	if resp.Allowed {
+		t.Errorf("scale-down via /scale subresource should be denied")
+	}
+}
+
+func TestServerValidateWorkloadDeploymentScaleSubresourceUpAllowed(t *testing.T) {
+	srv := newServerWithObjects(t, newDeployment(2, true))
+	review := buildScaleReview(t, "deployments", 2, 5)
+	resp := srv.validateWorkload(t.Context(), review)
+	if !resp.Allowed {
+		t.Errorf("scale-up via /scale subresource should be allowed")
+	}
+}
+
+func TestServerValidateWorkloadStatefulSetScaleSubresourceDenied(t *testing.T) {
+	srv := newServerWithObjects(t, newStatefulSet(5, true))
+	review := buildScaleReview(t, "statefulsets", 5, 2)
+	resp := srv.validateWorkload(t.Context(), review)
+	if resp.Allowed {
+		t.Errorf("statefulset scale-down via /scale subresource should be denied")
+	}
+}
+
+func TestServerValidateWorkloadScaleSubresourceNonCocoonAllowed(t *testing.T) {
+	srv := newServerWithObjects(t, newDeployment(5, false))
+	review := buildScaleReview(t, "deployments", 5, 2)
+	resp := srv.validateWorkload(t.Context(), review)
+	if !resp.Allowed {
+		t.Errorf("non-cocoon scale-down via /scale subresource should pass through")
+	}
+}
+
+func TestServerValidateWorkloadScaleSubresourceParentMissingAllowed(t *testing.T) {
+	// fail-open: an unreachable / missing parent should not block
+	// scale on every other workload in the cluster.
+	srv := newServerWithObjects(t)
+	review := buildScaleReview(t, "deployments", 5, 2)
+	resp := srv.validateWorkload(t.Context(), review)
+	if !resp.Allowed {
+		t.Errorf("missing parent should fail-open")
+	}
+}
+
+// newServerWithObjects builds an admission Server backed by a fake
+// kubernetes client pre-loaded with the supplied objects, so the
+// scale-subresource validator can fetch the parent workload.
+func newServerWithObjects(t *testing.T, objs ...runtime.Object) *Server {
+	t.Helper()
+	client := fake.NewSimpleClientset(objs...)
+	store := affinity.NewConfigMapStore(client, fixedNodePicker("node-test"))
+	return NewServer(store, client)
+}
+
+func buildScaleReview(t *testing.T, resource string, oldReplicas, newReplicas int32) *admissionv1.AdmissionReview {
+	t.Helper()
+	oldScale := autoscalingv1.Scale{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "demo"},
+		Spec:       autoscalingv1.ScaleSpec{Replicas: oldReplicas},
+	}
+	newScale := autoscalingv1.Scale{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "demo"},
+		Spec:       autoscalingv1.ScaleSpec{Replicas: newReplicas},
+	}
+	oldRaw, err := json.Marshal(&oldScale)
+	if err != nil {
+		t.Fatalf("marshal old scale: %v", err)
+	}
+	newRaw, err := json.Marshal(&newScale)
+	if err != nil {
+		t.Fatalf("marshal new scale: %v", err)
+	}
+	return &admissionv1.AdmissionReview{
+		Request: &admissionv1.AdmissionRequest{
+			UID:         "test-uid",
+			Kind:        metav1.GroupVersionKind{Group: "autoscaling", Version: "v1", Kind: "Scale"},
+			Resource:    metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: resource},
+			SubResource: "scale",
+			Namespace:   "ns",
+			Name:        "demo",
+			Operation:   admissionv1.Update,
+			Object:      runtime.RawExtension{Raw: newRaw},
+			OldObject:   runtime.RawExtension{Raw: oldRaw},
+		},
 	}
 }
 

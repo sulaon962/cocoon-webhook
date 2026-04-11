@@ -229,10 +229,10 @@ func TestConfigMapStoreReserveBarePod(t *testing.T) {
 }
 
 func TestReservationKey(t *testing.T) {
-	if got := reservationKey("ns", "demo", 0); got != "ns/demo/0" {
+	if got := reservationKey("ns", "demo", 0); got != "ns.demo.0" {
 		t.Errorf("deployed key: %q", got)
 	}
-	if got := reservationKey("ns", "", 0); got != "ns/_pod/0" {
+	if got := reservationKey("ns", "", 0); got != "ns._pod.0" {
 		t.Errorf("bare key: %q", got)
 	}
 }

@@ -198,7 +198,7 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	client := fake.NewSimpleClientset()
 	store := affinity.NewConfigMapStore(client, fixedNodePicker("node-test"))
-	return NewServer(store)
+	return NewServer(store, client)
 }
 
 func buildPodReview(t *testing.T, pod *corev1.Pod) *admissionv1.AdmissionReview {

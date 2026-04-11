@@ -8,7 +8,10 @@ import (
 	"github.com/projecteru2/core/log"
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
@@ -30,10 +33,24 @@ type scalable interface {
 // because the agents are stateful VMs — reducing replicas would
 // destroy state. Operators should use a CocoonHibernation CR to
 // suspend an individual agent instead.
+//
+// Two request shapes reach this handler:
+//
+//   - Direct PUT/PATCH on the parent: req.Kind = Deployment/StatefulSet,
+//     req.SubResource = "". The request body carries the full object,
+//     including the pod template tolerations we use to filter cocoon
+//     workloads.
+//   - kubectl scale: req.Resource = deployments/statefulsets,
+//     req.SubResource = "scale", req.Kind = autoscaling/v1 Scale. The
+//     request body is just a Scale, so we have to fetch the parent
+//     out of band to read its tolerations.
 func (s *Server) validateWorkload(ctx context.Context, review *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	req := review.Request
 	if req.Operation != admissionv1.Update {
 		return commonadmission.Allow()
+	}
+	if req.SubResource == "scale" {
+		return s.validateScaleSubresource(ctx, req)
 	}
 	switch req.Kind.Kind {
 	case "Deployment":
@@ -42,6 +59,73 @@ func (s *Server) validateWorkload(ctx context.Context, review *admissionv1.Admis
 		return validateScaleDown[appsv1.StatefulSet](ctx, req)
 	default:
 		return commonadmission.Allow()
+	}
+}
+
+// validateScaleSubresource handles UPDATEs to deployments/scale and
+// statefulsets/scale. The Scale object only carries spec.replicas, so
+// we look up the parent workload from the apiserver to read its
+// tolerations and decide whether the cocoon scale-down rule applies.
+//
+// Failure modes are deliberately permissive (Allow + warning log)
+// rather than Fail-closed: an unreachable apiserver would otherwise
+// take down `kubectl scale` for every workload in the cluster, not
+// just cocoon ones. The mutating-webhook side is the only place that
+// has to be strict.
+func (s *Server) validateScaleSubresource(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	logger := log.WithFunc("validateScaleSubresource")
+
+	var oldScale, newScale autoscalingv1.Scale
+	if err := json.Unmarshal(req.OldObject.Raw, &oldScale); err != nil {
+		logger.Warnf(ctx, "decode old Scale %s/%s: %v", req.Namespace, req.Name, err)
+		return commonadmission.Allow()
+	}
+	if err := json.Unmarshal(req.Object.Raw, &newScale); err != nil {
+		logger.Warnf(ctx, "decode new Scale %s/%s: %v", req.Namespace, req.Name, err)
+		return commonadmission.Allow()
+	}
+
+	tolerations, ok := s.fetchParentTolerations(ctx, req)
+	if !ok {
+		// Fetch failed; we already logged the underlying cause. Allow
+		// the request rather than wedging cluster scaling on a
+		// transient apiserver hiccup.
+		return commonadmission.Allow()
+	}
+	if !meta.HasCocoonToleration(tolerations) {
+		return commonadmission.Allow()
+	}
+	return checkScaleDown(ctx, req, oldScale.Spec.Replicas, newScale.Spec.Replicas)
+}
+
+// fetchParentTolerations resolves req.Resource to the parent
+// Deployment / StatefulSet and returns its pod-template tolerations.
+// Returns ok=false if the resource is not one we know about or the
+// API call failed for any reason other than NotFound (NotFound also
+// returns false: nothing to enforce against a missing parent).
+func (s *Server) fetchParentTolerations(ctx context.Context, req *admissionv1.AdmissionRequest) ([]corev1.Toleration, bool) {
+	logger := log.WithFunc("fetchParentTolerations")
+	switch req.Resource.Resource {
+	case "deployments":
+		dep, err := s.client.AppsV1().Deployments(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				logger.Warnf(ctx, "get parent Deployment %s/%s: %v", req.Namespace, req.Name, err)
+			}
+			return nil, false
+		}
+		return dep.Spec.Template.Spec.Tolerations, true
+	case "statefulsets":
+		sts, err := s.client.AppsV1().StatefulSets(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				logger.Warnf(ctx, "get parent StatefulSet %s/%s: %v", req.Namespace, req.Name, err)
+			}
+			return nil, false
+		}
+		return sts.Spec.Template.Spec.Tolerations, true
+	default:
+		return nil, false
 	}
 }
 

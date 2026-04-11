@@ -3,6 +3,8 @@ package admission
 import (
 	"net/http"
 
+	"k8s.io/client-go/kubernetes"
+
 	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
 	"github.com/cocoonstack/cocoon-webhook/affinity"
 )
@@ -10,12 +12,17 @@ import (
 // Server hosts the admission webhook HTTP handlers. Dependencies are
 // injected so each handler stays trivially testable.
 type Server struct {
-	store affinity.Store
+	store  affinity.Store
+	client kubernetes.Interface
 }
 
-// NewServer constructs a Server with the supplied dependencies.
-func NewServer(store affinity.Store) *Server {
-	return &Server{store: store}
+// NewServer constructs a Server with the supplied dependencies. The
+// kubernetes client is used by the workload validator to fetch the
+// parent Deployment / StatefulSet on /scale subresource UPDATEs,
+// where the AdmissionRequest carries an autoscaling/v1.Scale object
+// instead of the parent's pod template.
+func NewServer(store affinity.Store, client kubernetes.Interface) *Server {
+	return &Server{store: store, client: client}
 }
 
 // Routes returns the HTTP handler exposing every webhook endpoint.
