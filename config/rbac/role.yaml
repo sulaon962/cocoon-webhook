@@ -23,6 +23,14 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+  # Scale-down validation needs to fetch the parent Deployment /
+  # StatefulSet on /scale subresource UPDATEs because the Scale
+  # object passed to the webhook does not carry the pod template
+  # tolerations the cocoon filter relies on.
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
