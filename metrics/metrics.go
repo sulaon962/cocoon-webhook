@@ -17,13 +17,13 @@ const (
 	labelDecision = "decision"
 	labelPool     = "pool"
 
-	HandlerMutate          = "mutate"
-	HandlerValidate        = "validate"
-	HandlerCocoonSetValid  = "validate_cocoonset"
-	DecisionAllow          = "allow"
-	DecisionDeny           = "deny"
-	DecisionError          = "error"
-	DecisionAffinityFailed = "affinity_failed"
+	HandlerMutate            = "mutate"
+	HandlerValidate          = "validate"
+	HandlerValidateCocoonSet = "validate_cocoonset"
+	DecisionAllow            = "allow"
+	DecisionDeny             = "deny"
+	DecisionError            = "error"
+	DecisionAffinityFailed   = "affinity_failed"
 )
 
 var (

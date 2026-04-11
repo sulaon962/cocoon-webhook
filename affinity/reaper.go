@@ -16,14 +16,14 @@ import (
 )
 
 const (
-	// reaperDefaultInterval is how often the reaper sweeps the
+	// DefaultReaperInterval is how often the reaper sweeps the
 	// affinity ConfigMaps for orphan reservations.
-	reaperDefaultInterval = 5 * time.Minute
-	// reaperDefaultGrace is how long an orphan reservation is kept
+	DefaultReaperInterval = 5 * time.Minute
+	// DefaultReaperGrace is how long an orphan reservation is kept
 	// before being released, to absorb brief windows where a pod is
 	// recreated under the same name without the webhook's mutate
 	// being involved.
-	reaperDefaultGrace = 30 * time.Minute
+	DefaultReaperGrace = 30 * time.Minute
 )
 
 // Reaper periodically scans every per-pool affinity ConfigMap and
@@ -36,22 +36,27 @@ type Reaper struct {
 	store     Store
 	client    kubernetes.Interface
 	podLister corelisters.PodLister
-
-	Interval time.Duration
-	Grace    time.Duration
+	interval  time.Duration
+	grace     time.Duration
 }
 
-// NewReaper constructs a Reaper with sensible defaults filled in for
-// any zero-valued field. The pod lister must come from a started,
-// cache-synced informer; the client is only used to list the
-// per-pool affinity ConfigMaps.
-func NewReaper(store Store, client kubernetes.Interface, pods corelisters.PodLister) *Reaper {
+// NewReaper constructs a Reaper. A non-positive interval or grace
+// is replaced with the package default. The pod lister must come
+// from a started, cache-synced informer; the client is only used
+// to list the per-pool affinity ConfigMaps.
+func NewReaper(store Store, client kubernetes.Interface, pods corelisters.PodLister, interval, grace time.Duration) *Reaper {
+	if interval <= 0 {
+		interval = DefaultReaperInterval
+	}
+	if grace <= 0 {
+		grace = DefaultReaperGrace
+	}
 	return &Reaper{
 		store:     store,
 		client:    client,
 		podLister: pods,
-		Interval:  reaperDefaultInterval,
-		Grace:     reaperDefaultGrace,
+		interval:  interval,
+		grace:     grace,
 	}
 }
 
@@ -65,7 +70,7 @@ func (r *Reaper) Run(ctx context.Context) {
 		logger.Warnf(ctx, "initial sweep: %v", err)
 	}
 
-	ticker := time.NewTicker(r.Interval)
+	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
 	for {
@@ -96,7 +101,7 @@ func (r *Reaper) reapOnce(ctx context.Context) error {
 			continue
 		}
 		for _, entry := range entries {
-			if !r.shouldRelease(ctx, entry, now) {
+			if !r.shouldRelease(entry, now) {
 				continue
 			}
 			if err := r.store.Release(ctx, entry.Pool, entry.Namespace, entry.Deployment, entry.Slot); err != nil {
@@ -132,11 +137,11 @@ func (r *Reaper) discoverPools(ctx context.Context) ([]string, error) {
 // shouldRelease decides whether a reservation is stale enough to drop.
 // Conditions: the pod no longer exists in its namespace, AND the
 // reservation is older than the grace window.
-func (r *Reaper) shouldRelease(_ context.Context, entry Reservation, now time.Time) bool {
+func (r *Reaper) shouldRelease(entry Reservation, now time.Time) bool {
 	if entry.Pod == "" {
 		return false
 	}
-	if now.Sub(entry.UpdatedAt) < r.Grace {
+	if now.Sub(entry.UpdatedAt) < r.grace {
 		return false
 	}
 	_, err := r.podLister.Pods(entry.Namespace).Get(entry.Pod)

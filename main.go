@@ -93,9 +93,9 @@ func main() {
 
 	picker := affinity.NewLeastUsedPicker(podInformer.GetIndexer(), nodeLister)
 	affinityStore := affinity.NewConfigMapStore(clientset, picker)
-	reaper := affinity.NewReaper(affinityStore, clientset, podLister)
-	reaper.Interval = commonk8s.EnvDuration("REAPER_INTERVAL", reaper.Interval)
-	reaper.Grace = commonk8s.EnvDuration("REAPER_GRACE", reaper.Grace)
+	reaper := affinity.NewReaper(affinityStore, clientset, podLister,
+		commonk8s.EnvDuration("REAPER_INTERVAL", affinity.DefaultReaperInterval),
+		commonk8s.EnvDuration("REAPER_GRACE", affinity.DefaultReaperGrace))
 
 	server := &http.Server{
 		Addr:              listen,

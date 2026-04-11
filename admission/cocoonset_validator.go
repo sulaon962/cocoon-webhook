@@ -36,10 +36,10 @@ func (s *Server) validateCocoonSet(ctx context.Context, review *admissionv1.Admi
 	if errs := validateCocoonSetSpec(&cs); len(errs) > 0 {
 		msg := "cocoon-webhook: invalid CocoonSet spec: " + strings.Join(errs, "; ")
 		logger.Warnf(ctx, "validate %s/%s DENY: %s", req.Namespace, req.Name, msg)
-		metrics.RecordAdmission(metrics.HandlerCocoonSetValid, metrics.DecisionDeny)
+		metrics.RecordAdmission(metrics.HandlerValidateCocoonSet, metrics.DecisionDeny)
 		return commonadmission.Deny(msg)
 	}
-	metrics.RecordAdmission(metrics.HandlerCocoonSetValid, metrics.DecisionAllow)
+	metrics.RecordAdmission(metrics.HandlerValidateCocoonSet, metrics.DecisionAllow)
 	return commonadmission.Allow()
 }
 
