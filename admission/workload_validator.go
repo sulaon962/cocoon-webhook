@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
+	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
 	"github.com/cocoonstack/cocoon-common/meta"
 	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
@@ -32,7 +33,7 @@ type scalable interface {
 func (s *Server) validateWorkload(ctx context.Context, review *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	req := review.Request
 	if req.Operation != admissionv1.Update {
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 	switch req.Kind.Kind {
 	case "Deployment":
@@ -40,7 +41,7 @@ func (s *Server) validateWorkload(ctx context.Context, review *admissionv1.Admis
 	case "StatefulSet":
 		return validateScaleDown[appsv1.StatefulSet](ctx, req)
 	default:
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 }
 
@@ -51,15 +52,15 @@ func validateScaleDown[T scalable](ctx context.Context, req *admissionv1.Admissi
 	var oldObj, newObj T
 	if err := json.Unmarshal(req.OldObject.Raw, &oldObj); err != nil {
 		logger.Warnf(ctx, "decode old %s %s/%s: %v", req.Kind.Kind, req.Namespace, req.Name, err)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 	if err := json.Unmarshal(req.Object.Raw, &newObj); err != nil {
 		logger.Warnf(ctx, "decode new %s %s/%s: %v", req.Kind.Kind, req.Namespace, req.Name, err)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	if !meta.HasCocoonToleration(workloadTolerations(&newObj)) {
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 	return checkScaleDown(ctx, req, workloadReplicas(&oldObj), workloadReplicas(&newObj))
 }
@@ -94,7 +95,7 @@ func workloadTolerations[T scalable](obj *T) []corev1.Toleration {
 func checkScaleDown(ctx context.Context, req *admissionv1.AdmissionRequest, oldReplicas, newReplicas int32) *admissionv1.AdmissionResponse {
 	if newReplicas >= oldReplicas {
 		metrics.RecordAdmission(metrics.HandlerValidate, metrics.DecisionAllow)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 	msg := fmt.Sprintf(
 		"cocoon-webhook: scale-down blocked for cocoon %s %s/%s (%d -> %d). "+
@@ -102,5 +103,5 @@ func checkScaleDown(ctx context.Context, req *admissionv1.AdmissionRequest, oldR
 		req.Kind.Kind, req.Namespace, req.Name, oldReplicas, newReplicas)
 	log.WithFunc("checkScaleDown").Warn(ctx, msg)
 	metrics.RecordAdmission(metrics.HandlerValidate, metrics.DecisionDeny)
-	return denyResponse(msg)
+	return commonadmission.Deny(msg)
 }

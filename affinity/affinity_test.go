@@ -139,7 +139,7 @@ func TestConfigMapStoreReserveReusesExistingNode(t *testing.T) {
 
 	// Even if the picker would now return a different node, the store
 	// should re-use first.Node because slot 0 already has a pin.
-	store.Picker = fixedNodePicker("never-picked")
+	store.picker = fixedNodePicker("never-picked")
 	second, err := store.Reserve(t.Context(), ReserveRequest{
 		Pool: "default", Namespace: "ns", Deployment: "demo", PodName: "demo-0",
 	})

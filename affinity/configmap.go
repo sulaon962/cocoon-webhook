@@ -1,10 +1,11 @@
 package affinity
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"time"
 
@@ -25,8 +26,8 @@ var _ Store = (*ConfigMapStore)(nil)
 // the value is a JSON-encoded Reservation. RetryOnConflict guards
 // concurrent webhook replicas racing on the same ConfigMap.
 type ConfigMapStore struct {
-	Client kubernetes.Interface
-	Picker NodePicker
+	client kubernetes.Interface
+	picker NodePicker
 }
 
 // NewConfigMapStore returns a ConfigMapStore using nilNodePicker as
@@ -35,7 +36,7 @@ func NewConfigMapStore(client kubernetes.Interface, picker NodePicker) *ConfigMa
 	if picker == nil {
 		picker = nilNodePicker{}
 	}
-	return &ConfigMapStore{Client: client, Picker: picker}
+	return &ConfigMapStore{client: client, picker: picker}
 }
 
 // Reserve allocates (or reuses) a slot for the requested pod and
@@ -60,6 +61,17 @@ func (s *ConfigMapStore) Reserve(ctx context.Context, req ReserveRequest) (Reser
 		}
 
 		entries := decodeReservations(cm)
+
+		// Fast path: a prior reservation for this exact pod with a
+		// pinned node is byte-identical to anything we would write.
+		// Skip the Update round trip and return the cached entry.
+		// Refreshing UpdatedAt is not needed — the reaper gates on
+		// pod-existence, not reservation age.
+		if existing, ok := findExistingReservation(entries, req.Namespace, req.Deployment, req.PodName); ok && existing.Node != "" {
+			result = existing
+			return nil
+		}
+
 		slot := allocateSlot(entries, req.Namespace, req.Deployment, req.PodName)
 
 		var vmName string
@@ -73,7 +85,7 @@ func (s *ConfigMapStore) Reserve(ctx context.Context, req ReserveRequest) (Reser
 		// (deployment, slot) to one. Otherwise consult the picker.
 		node := lookupExistingNode(entries, req.Namespace, req.Deployment, slot)
 		if node == "" {
-			node, err = s.Picker.Pick(ctx, req.Pool)
+			node, err = s.picker.Pick(ctx, req.Pool)
 			if err != nil {
 				return fmt.Errorf("pick node: %w", err)
 			}
@@ -125,7 +137,7 @@ func (s *ConfigMapStore) Release(ctx context.Context, pool, namespace, deploymen
 
 // List returns every reservation currently stored for the pool.
 func (s *ConfigMapStore) List(ctx context.Context, pool string) ([]Reservation, error) {
-	cm, err := s.Client.CoreV1().ConfigMaps(systemNamespace).Get(ctx, configMapName(pool), metav1.GetOptions{})
+	cm, err := s.client.CoreV1().ConfigMaps(systemNamespace).Get(ctx, configMapName(pool), metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil, nil
 	}
@@ -133,21 +145,19 @@ func (s *ConfigMapStore) List(ctx context.Context, pool string) ([]Reservation, 
 		return nil, err
 	}
 	out := decodeReservations(cm)
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Namespace != out[j].Namespace {
-			return out[i].Namespace < out[j].Namespace
-		}
-		if out[i].Deployment != out[j].Deployment {
-			return out[i].Deployment < out[j].Deployment
-		}
-		return out[i].Slot < out[j].Slot
+	slices.SortFunc(out, func(a, b Reservation) int {
+		return cmp.Or(
+			cmp.Compare(a.Namespace, b.Namespace),
+			cmp.Compare(a.Deployment, b.Deployment),
+			cmp.Compare(a.Slot, b.Slot),
+		)
 	})
 	return out, nil
 }
 
 func (s *ConfigMapStore) fetchOrInitConfigMap(ctx context.Context, pool string) (*corev1.ConfigMap, bool, error) {
 	name := configMapName(pool)
-	cm, err := s.Client.CoreV1().ConfigMaps(systemNamespace).Get(ctx, name, metav1.GetOptions{})
+	cm, err := s.client.CoreV1().ConfigMaps(systemNamespace).Get(ctx, name, metav1.GetOptions{})
 	switch {
 	case err == nil:
 		if cm.Data == nil {
@@ -172,7 +182,7 @@ func (s *ConfigMapStore) fetchOrInitConfigMap(ctx context.Context, pool string) 
 }
 
 func (s *ConfigMapStore) persist(ctx context.Context, cm *corev1.ConfigMap, isNew bool) error {
-	cms := s.Client.CoreV1().ConfigMaps(systemNamespace)
+	cms := s.client.CoreV1().ConfigMaps(systemNamespace)
 	if isNew {
 		if _, err := cms.Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 			if apierrors.IsAlreadyExists(err) {
@@ -269,4 +279,17 @@ func lookupExistingNode(entries []Reservation, namespace, deployment string, slo
 		}
 	}
 	return ""
+}
+
+// findExistingReservation returns the reservation previously written
+// for (namespace, deployment, podName), if one exists. Used by the
+// Reserve fast path to short-circuit a re-admission of the same pod
+// without issuing an apiserver Update.
+func findExistingReservation(entries []Reservation, namespace, deployment, podName string) (Reservation, bool) {
+	for _, e := range entries {
+		if e.Namespace == namespace && e.Deployment == deployment && e.Pod == podName {
+			return e, true
+		}
+	}
+	return Reservation{}, false
 }

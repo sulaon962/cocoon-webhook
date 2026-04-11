@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	cocoonv1 "github.com/cocoonstack/cocoon-common/apis/v1"
+	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
 	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
 
@@ -23,23 +24,23 @@ func (s *Server) validateCocoonSet(ctx context.Context, review *admissionv1.Admi
 	req := review.Request
 
 	if req.Operation != admissionv1.Create && req.Operation != admissionv1.Update {
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	var cs cocoonv1.CocoonSet
 	if err := json.Unmarshal(req.Object.Raw, &cs); err != nil {
 		logger.Warnf(ctx, "decode cocoonset %s/%s: %v", req.Namespace, req.Name, err)
-		return denyResponse(fmt.Sprintf("decode CocoonSet: %v", err))
+		return commonadmission.Deny(fmt.Sprintf("decode CocoonSet: %v", err))
 	}
 
 	if errs := validateCocoonSetSpec(&cs); len(errs) > 0 {
 		msg := "cocoon-webhook: invalid CocoonSet spec: " + strings.Join(errs, "; ")
 		logger.Warnf(ctx, "validate %s/%s DENY: %s", req.Namespace, req.Name, msg)
 		metrics.RecordAdmission(metrics.HandlerCocoonSetValid, metrics.DecisionDeny)
-		return denyResponse(msg)
+		return commonadmission.Deny(msg)
 	}
 	metrics.RecordAdmission(metrics.HandlerCocoonSetValid, metrics.DecisionAllow)
-	return allowResponse()
+	return commonadmission.Allow()
 }
 
 // validateCocoonSetSpec returns the list of human-readable error

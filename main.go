@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -26,7 +25,6 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/utils/env"
 
 	commonk8s "github.com/cocoonstack/cocoon-common/k8s"
 	commonlog "github.com/cocoonstack/cocoon-common/log"
@@ -50,21 +48,6 @@ const (
 	informerResync = 0
 )
 
-// envDuration parses a duration env var. Empty / unparseable falls
-// back to the supplied default so the binary stays bootable when
-// an operator typoes the override.
-func envDuration(key string, fallback time.Duration) time.Duration {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return fallback
-	}
-	return d
-}
-
 func main() {
 	ctx := context.Background()
 	commonlog.Setup(ctx, "WEBHOOK_LOG_LEVEL")
@@ -73,10 +56,10 @@ func main() {
 
 	metrics.Register(prometheus.DefaultRegisterer)
 
-	certFile := env.GetString("TLS_CERT", defaultCertFile)
-	keyFile := env.GetString("TLS_KEY", defaultKeyFile)
-	listen := env.GetString("LISTEN_ADDR", defaultListen)
-	metricsListen := env.GetString("METRICS_ADDR", defaultMetricsListen)
+	certFile := commonk8s.EnvOrDefault("TLS_CERT", defaultCertFile)
+	keyFile := commonk8s.EnvOrDefault("TLS_KEY", defaultKeyFile)
+	listen := commonk8s.EnvOrDefault("LISTEN_ADDR", defaultListen)
+	metricsListen := commonk8s.EnvOrDefault("METRICS_ADDR", defaultMetricsListen)
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -111,12 +94,12 @@ func main() {
 	picker := affinity.NewLeastUsedPicker(podInformer.GetIndexer(), nodeLister)
 	affinityStore := affinity.NewConfigMapStore(clientset, picker)
 	reaper := affinity.NewReaper(affinityStore, clientset, podLister)
-	reaper.Interval = envDuration("REAPER_INTERVAL", reaper.Interval)
-	reaper.Grace = envDuration("REAPER_GRACE", reaper.Grace)
+	reaper.Interval = commonk8s.EnvDuration("REAPER_INTERVAL", reaper.Interval)
+	reaper.Grace = commonk8s.EnvDuration("REAPER_GRACE", reaper.Grace)
 
 	server := &http.Server{
 		Addr:              listen,
-		Handler:           admission.NewServer(clientset, affinityStore).Routes(),
+		Handler:           admission.NewServer(affinityStore).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},

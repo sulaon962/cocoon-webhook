@@ -33,11 +33,12 @@ const (
 // so a sweep across N reservations is N in-memory lookups instead
 // of N apiserver GETs.
 type Reaper struct {
-	Store     Store
-	Client    kubernetes.Interface
-	PodLister corelisters.PodLister
-	Interval  time.Duration
-	Grace     time.Duration
+	store     Store
+	client    kubernetes.Interface
+	podLister corelisters.PodLister
+
+	Interval time.Duration
+	Grace    time.Duration
 }
 
 // NewReaper constructs a Reaper with sensible defaults filled in for
@@ -46,9 +47,9 @@ type Reaper struct {
 // per-pool affinity ConfigMaps.
 func NewReaper(store Store, client kubernetes.Interface, pods corelisters.PodLister) *Reaper {
 	return &Reaper{
-		Store:     store,
-		Client:    client,
-		PodLister: pods,
+		store:     store,
+		client:    client,
+		podLister: pods,
 		Interval:  reaperDefaultInterval,
 		Grace:     reaperDefaultGrace,
 	}
@@ -89,7 +90,7 @@ func (r *Reaper) reapOnce(ctx context.Context) error {
 	}
 	now := time.Now().UTC()
 	for _, pool := range pools {
-		entries, err := r.Store.List(ctx, pool)
+		entries, err := r.store.List(ctx, pool)
 		if err != nil {
 			logger.Warnf(ctx, "list reservations for pool %s: %v", pool, err)
 			continue
@@ -98,7 +99,7 @@ func (r *Reaper) reapOnce(ctx context.Context) error {
 			if !r.shouldRelease(ctx, entry, now) {
 				continue
 			}
-			if err := r.Store.Release(ctx, entry.Pool, entry.Namespace, entry.Deployment, entry.Slot); err != nil {
+			if err := r.store.Release(ctx, entry.Pool, entry.Namespace, entry.Deployment, entry.Slot); err != nil {
 				logger.Warnf(ctx, "release %s/%s slot %d: %v", entry.Namespace, entry.Deployment, entry.Slot, err)
 				continue
 			}
@@ -113,7 +114,7 @@ func (r *Reaper) reapOnce(ctx context.Context) error {
 // discoverPools lists every per-pool ConfigMap in the cocoon system
 // namespace by label and returns the pool names.
 func (r *Reaper) discoverPools(ctx context.Context) ([]string, error) {
-	cms, err := r.Client.CoreV1().ConfigMaps(systemNamespace).List(ctx, metav1.ListOptions{
+	cms, err := r.client.CoreV1().ConfigMaps(systemNamespace).List(ctx, metav1.ListOptions{
 		LabelSelector: meta.LabelManagedBy + "=" + managedByValue,
 	})
 	if err != nil {
@@ -138,7 +139,7 @@ func (r *Reaper) shouldRelease(_ context.Context, entry Reservation, now time.Ti
 	if now.Sub(entry.UpdatedAt) < r.Grace {
 		return false
 	}
-	_, err := r.PodLister.Pods(entry.Namespace).Get(entry.Pod)
+	_, err := r.podLister.Pods(entry.Namespace).Get(entry.Pod)
 	if err == nil {
 		return false
 	}

@@ -1,33 +1,27 @@
 package admission
 
 import (
-	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 
-	"github.com/projecteru2/core/log"
-	admissionv1 "k8s.io/api/admission/v1"
-	"k8s.io/client-go/kubernetes"
-
+	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
 	"github.com/cocoonstack/cocoon-webhook/affinity"
 )
-
-const maxAdmissionBody = 10 << 20 // 10 MiB upper bound on request body size.
 
 // Server hosts the admission webhook HTTP handlers. Dependencies are
 // injected so each handler stays trivially testable.
 type Server struct {
-	clientset kubernetes.Interface
-	store     affinity.Store
+	store affinity.Store
 }
 
 // NewServer constructs a Server with the supplied dependencies.
-func NewServer(clientset kubernetes.Interface, store affinity.Store) *Server {
-	return &Server{clientset: clientset, store: store}
+func NewServer(store affinity.Store) *Server {
+	return &Server{store: store}
 }
 
 // Routes returns the HTTP handler exposing every webhook endpoint.
+// Decode / dispatch / encode for the admission endpoints lives in
+// cocoon-common/k8s/admission; the per-endpoint handlers live in
+// this package.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mutate", s.handleMutate)
@@ -49,53 +43,13 @@ func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleMutate(w http.ResponseWriter, r *http.Request) {
-	s.serveAdmission(w, r, s.mutatePod)
+	commonadmission.Serve(w, r, 0, s.mutatePod)
 }
 
 func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
-	s.serveAdmission(w, r, s.validateWorkload)
+	commonadmission.Serve(w, r, 0, s.validateWorkload)
 }
 
 func (s *Server) handleValidateCocoonSet(w http.ResponseWriter, r *http.Request) {
-	s.serveAdmission(w, r, s.validateCocoonSet)
-}
-
-// serveAdmission decodes an AdmissionReview, dispatches it to the
-// supplied admission function, copies the request UID onto the
-// response (required by the API server), and writes the response.
-func (s *Server) serveAdmission(
-	w http.ResponseWriter,
-	r *http.Request,
-	admit func(context.Context, *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse,
-) {
-	logger := log.WithFunc("serveAdmission")
-	review, err := decodeAdmissionReview(r)
-	if err != nil {
-		logger.Warnf(r.Context(), "decode admission review: %v", err)
-		http.Error(w, "decode admission review", http.StatusBadRequest)
-		return
-	}
-	resp := admit(r.Context(), review)
-	if resp == nil {
-		resp = allowResponse()
-	}
-	resp.UID = review.Request.UID
-	review.Response = resp
-
-	out, err := json.Marshal(review)
-	if err != nil {
-		logger.Error(r.Context(), err, "marshal admission review")
-		http.Error(w, "encode response", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(out) //nolint:gosec // marshaled JSON API response, not rendered as HTML
-}
-
-func decodeAdmissionReview(r *http.Request) (*admissionv1.AdmissionReview, error) {
-	var review admissionv1.AdmissionReview
-	if err := json.NewDecoder(io.LimitReader(r.Body, maxAdmissionBody)).Decode(&review); err != nil {
-		return nil, err
-	}
-	return &review, nil
+	commonadmission.Serve(w, r, 0, s.validateCocoonSet)
 }

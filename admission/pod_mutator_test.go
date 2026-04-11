@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
+	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
 	"github.com/cocoonstack/cocoon-common/meta"
 	"github.com/cocoonstack/cocoon-webhook/affinity"
 )
@@ -57,7 +58,7 @@ func TestPodNodePoolPrecedence(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			pod := c.pod
-			if got := podNodePool(&pod); got != c.want {
+			if got := meta.PodNodePool(&pod); got != c.want {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
@@ -71,7 +72,7 @@ func TestEscapeJSONPointer(t *testing.T) {
 		"plain":                  "plain",
 	}
 	for in, want := range cases {
-		if got := escapeJSONPointer(in); got != want {
+		if got := commonadmission.EscapeJSONPointer(in); got != want {
 			t.Errorf("escape %q = %q, want %q", in, got, want)
 		}
 	}
@@ -197,7 +198,7 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	client := fake.NewSimpleClientset()
 	store := affinity.NewConfigMapStore(client, fixedNodePicker("node-test"))
-	return NewServer(client, store)
+	return NewServer(store)
 }
 
 func buildPodReview(t *testing.T, pod *corev1.Pod) *admissionv1.AdmissionReview {

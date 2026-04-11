@@ -3,13 +3,12 @@ package admission
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/projecteru2/core/log"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 
+	commonadmission "github.com/cocoonstack/cocoon-common/k8s/admission"
 	"github.com/cocoonstack/cocoon-common/meta"
 	"github.com/cocoonstack/cocoon-webhook/affinity"
 	"github.com/cocoonstack/cocoon-webhook/metrics"
@@ -26,33 +25,33 @@ func (s *Server) mutatePod(ctx context.Context, review *admissionv1.AdmissionRev
 
 	if req.Kind.Kind != "Pod" {
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	var pod corev1.Pod
 	if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
 		logger.Warnf(ctx, "decode pod %s/%s: %v", req.Namespace, req.Name, err)
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionError)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	if !meta.HasCocoonToleration(pod.Spec.Tolerations) {
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	if meta.IsOwnedByCocoonSet(pod.OwnerReferences) {
 		// CocoonSet-managed pods come pre-annotated by the operator.
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	if pod.Spec.NodeName != "" {
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAllow)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
-	pool := podNodePool(&pod)
+	pool := meta.PodNodePool(&pod)
 	name := podDisplayName(&pod, req)
 	res, err := s.store.Reserve(ctx, affinity.ReserveRequest{
 		Pool:       pool,
@@ -65,7 +64,7 @@ func (s *Server) mutatePod(ctx context.Context, review *admissionv1.AdmissionRev
 		// unreachable: log loudly and let the pod through unmutated.
 		logger.Errorf(ctx, err, "reserve affinity for pod %s/%s", req.Namespace, name)
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionAffinityFailed)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 	metrics.RecordReservation(pool)
 
@@ -73,7 +72,7 @@ func (s *Server) mutatePod(ctx context.Context, review *admissionv1.AdmissionRev
 	if err != nil {
 		logger.Errorf(ctx, err, "build mutate patch for pod %s/%s", req.Namespace, name)
 		metrics.RecordAdmission(metrics.HandlerMutate, metrics.DecisionError)
-		return allowResponse()
+		return commonadmission.Allow()
 	}
 
 	logger.Infof(ctx, "mutate %s/%s: vm=%s node=%s", req.Namespace, name, res.VMName, res.Node)
@@ -101,63 +100,28 @@ func podDisplayName(pod *corev1.Pod, req *admissionv1.AdmissionRequest) string {
 	return pod.GenerateName + "<unnamed>"
 }
 
-// podNodePool returns the cocoon pool the pod requests. Resolution
-// order: nodeSelector[cocoonstack.io/pool] -> labels[cocoonstack.io/pool]
-// -> annotations[cocoonstack.io/pool] -> default.
-func podNodePool(pod *corev1.Pod) string {
-	if v := pod.Spec.NodeSelector[meta.LabelNodePool]; v != "" {
-		return v
-	}
-	if v := pod.Labels[meta.LabelNodePool]; v != "" {
-		return v
-	}
-	if v := pod.Annotations[meta.LabelNodePool]; v != "" {
-		return v
-	}
-	return meta.DefaultNodePool
-}
-
-// jsonPatchOp is a single RFC 6902 patch operation.
-type jsonPatchOp struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value any    `json:"value,omitempty"`
-}
-
 // buildMutatePatch produces an RFC 6902 JSON patch that writes the
 // VM name annotation and (when present) pins spec.nodeName.
 func buildMutatePatch(pod *corev1.Pod, res affinity.Reservation) ([]byte, error) {
-	var ops []jsonPatchOp
+	var ops []commonadmission.JSONPatchOp
 	if pod.Annotations == nil {
-		ops = append(ops, jsonPatchOp{
+		ops = append(ops, commonadmission.JSONPatchOp{
 			Op:    "add",
 			Path:  "/metadata/annotations",
 			Value: map[string]string{},
 		})
 	}
-	ops = append(ops, jsonPatchOp{
+	ops = append(ops, commonadmission.JSONPatchOp{
 		Op:    "add",
-		Path:  "/metadata/annotations/" + escapeJSONPointer(meta.AnnotationVMName),
+		Path:  "/metadata/annotations/" + commonadmission.EscapeJSONPointer(meta.AnnotationVMName),
 		Value: res.VMName,
 	})
 	if res.Node != "" {
-		ops = append(ops, jsonPatchOp{
+		ops = append(ops, commonadmission.JSONPatchOp{
 			Op:    "add",
 			Path:  "/spec/nodeName",
 			Value: res.Node,
 		})
 	}
-	out, err := json.Marshal(ops)
-	if err != nil {
-		return nil, fmt.Errorf("marshal patch: %w", err)
-	}
-	return out, nil
-}
-
-// escapeJSONPointer escapes the two characters that are reserved in
-// RFC 6901 JSON Pointer paths.
-func escapeJSONPointer(s string) string {
-	s = strings.ReplaceAll(s, "~", "~0")
-	s = strings.ReplaceAll(s, "/", "~1")
-	return s
+	return commonadmission.MarshalPatch(ops)
 }

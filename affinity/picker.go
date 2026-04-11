@@ -49,8 +49,8 @@ var _ NodePicker = (*LeastUsedPicker)(nil)
 // scans rather than two apiserver round trips on the admission hot
 // path.
 type LeastUsedPicker struct {
-	PodIndexer PodIndexer
-	NodeLister corelisters.NodeLister
+	podIndexer PodIndexer
+	nodeLister corelisters.NodeLister
 }
 
 // NewLeastUsedPicker constructs a LeastUsedPicker that reads from
@@ -58,7 +58,7 @@ type LeastUsedPicker struct {
 // starting the informer factory and waiting for cache sync before
 // calling Pick.
 func NewLeastUsedPicker(pods PodIndexer, nodes corelisters.NodeLister) *LeastUsedPicker {
-	return &LeastUsedPicker{PodIndexer: pods, NodeLister: nodes}
+	return &LeastUsedPicker{podIndexer: pods, nodeLister: nodes}
 }
 
 // Pick returns the name of the cocoon node in the pool that has the
@@ -71,7 +71,7 @@ func (p *LeastUsedPicker) Pick(_ context.Context, pool string) (string, error) {
 	}
 
 	poolSelector := labels.SelectorFromSet(labels.Set{meta.LabelNodePool: pool})
-	nodes, err := p.NodeLister.List(poolSelector)
+	nodes, err := p.nodeLister.List(poolSelector)
 	if err != nil {
 		return "", fmt.Errorf("list nodes for pool %s: %w", pool, err)
 	}
@@ -103,7 +103,7 @@ func (p *LeastUsedPicker) Pick(_ context.Context, pool string) (string, error) {
 func (p *LeastUsedPicker) podsPerNode(nodes []*corev1.Node) (map[string]int, error) {
 	counts := make(map[string]int, len(nodes))
 	for _, n := range nodes {
-		objs, err := p.PodIndexer.ByIndex(ByNodeIndex, n.Name)
+		objs, err := p.podIndexer.ByIndex(ByNodeIndex, n.Name)
 		if err != nil {
 			return nil, fmt.Errorf("index lookup for node %s: %w", n.Name, err)
 		}
