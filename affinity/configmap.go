@@ -28,6 +28,7 @@ type ConfigMapStore struct {
 	picker NodePicker
 }
 
+// NewConfigMapStore creates a ConfigMapStore with the given client and node picker.
 func NewConfigMapStore(client kubernetes.Interface, picker NodePicker) *ConfigMapStore {
 	if picker == nil {
 		picker = nilNodePicker{}

@@ -11,10 +11,7 @@ const (
 	managedByValue  = "cocoon-webhook"
 )
 
-func configMapName(pool string) string {
-	return configMapPrefix + pool
-}
-
+// Reservation records a slot-and-node assignment for a single pod.
 type Reservation struct {
 	Pool       string    `json:"pool"`
 	Namespace  string    `json:"namespace"`
@@ -33,6 +30,7 @@ type Store interface {
 	List(ctx context.Context, pool string) ([]Reservation, error)
 }
 
+// ReserveRequest contains the parameters for a reservation attempt.
 type ReserveRequest struct {
 	Pool       string
 	Namespace  string
@@ -40,6 +38,7 @@ type ReserveRequest struct {
 	PodName    string
 }
 
+// NodePicker selects a target node within a pool for pod scheduling.
 type NodePicker interface {
 	Pick(ctx context.Context, pool string) (string, error)
 }
@@ -47,6 +46,11 @@ type NodePicker interface {
 // nilNodePicker returns "" (let the scheduler decide).
 type nilNodePicker struct{}
 
+// Pick always returns an empty node name.
 func (nilNodePicker) Pick(_ context.Context, _ string) (string, error) {
 	return "", nil
+}
+
+func configMapName(pool string) string {
+	return configMapPrefix + pool
 }

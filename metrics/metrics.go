@@ -15,13 +15,20 @@ const (
 	labelDecision = "decision"
 	labelPool     = "pool"
 
-	HandlerMutate            = "mutate"
-	HandlerValidate          = "validate"
+	// HandlerMutate is the label value for the mutating admission handler.
+	HandlerMutate = "mutate"
+	// HandlerValidate is the label value for the validating admission handler.
+	HandlerValidate = "validate"
+	// HandlerValidateCocoonSet is the label value for CocoonSet validation.
 	HandlerValidateCocoonSet = "validate_cocoonset"
-	DecisionAllow            = "allow"
-	DecisionDeny             = "deny"
-	DecisionError            = "error"
-	DecisionAffinityFailed   = "affinity_failed"
+	// DecisionAllow is the label value for an allowed admission decision.
+	DecisionAllow = "allow"
+	// DecisionDeny is the label value for a denied admission decision.
+	DecisionDeny = "deny"
+	// DecisionError is the label value for an errored admission decision.
+	DecisionError = "error"
+	// DecisionAffinityFailed is the label value when affinity reservation fails.
+	DecisionAffinityFailed = "affinity_failed"
 )
 
 var (
@@ -56,22 +63,27 @@ var (
 	)
 )
 
+// Register registers all webhook metrics with the given registerer.
 func Register(reg prometheus.Registerer) {
 	reg.MustRegister(admissionTotal, affinityReservations, affinityReleases)
 }
 
+// Handler returns the Prometheus metrics HTTP handler.
 func Handler() http.Handler {
 	return promhttp.Handler()
 }
 
+// RecordAdmission increments the admission counter for the given handler and decision.
 func RecordAdmission(handler, decision string) {
 	admissionTotal.WithLabelValues(handler, decision).Inc()
 }
 
+// RecordReservation increments the reservation counter for the given pool.
 func RecordReservation(pool string) {
 	affinityReservations.WithLabelValues(pool).Inc()
 }
 
+// RecordRelease increments the release counter for the given pool.
 func RecordRelease(pool string) {
 	affinityReleases.WithLabelValues(pool).Inc()
 }

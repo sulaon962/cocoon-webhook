@@ -13,10 +13,12 @@ import (
 	"github.com/cocoonstack/cocoon-common/meta"
 )
 
+// ByNodeIndex is the cache indexer name for pod-by-node lookups.
 const (
 	ByNodeIndex = "byNode"
 )
 
+// NodeNameIndexFunc extracts the node name from a Pod for cache indexing.
 func NodeNameIndexFunc(obj any) ([]string, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
@@ -28,6 +30,7 @@ func NodeNameIndexFunc(obj any) ([]string, error) {
 	return []string{pod.Spec.NodeName}, nil
 }
 
+// PodIndexer abstracts the informer cache index lookup used by LeastUsedPicker.
 type PodIndexer interface {
 	ByIndex(indexName, indexedValue string) ([]any, error)
 }
@@ -40,6 +43,7 @@ type LeastUsedPicker struct {
 	nodeLister corelisters.NodeLister
 }
 
+// NewLeastUsedPicker creates a picker that favors nodes with fewer running pods.
 func NewLeastUsedPicker(pods PodIndexer, nodes corelisters.NodeLister) *LeastUsedPicker {
 	return &LeastUsedPicker{podIndexer: pods, nodeLister: nodes}
 }

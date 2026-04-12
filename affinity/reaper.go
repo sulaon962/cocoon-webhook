@@ -15,6 +15,7 @@ import (
 	"github.com/cocoonstack/cocoon-webhook/metrics"
 )
 
+// DefaultReaperInterval is the sweep interval between orphan-reservation checks.
 const (
 	DefaultReaperInterval = 5 * time.Minute
 	// DefaultReaperGrace absorbs brief windows where a pod is recreated under the same name.
@@ -30,6 +31,7 @@ type Reaper struct {
 	grace     time.Duration
 }
 
+// NewReaper creates a Reaper that sweeps orphan reservations on the given interval.
 func NewReaper(store Store, client kubernetes.Interface, pods corelisters.PodLister, interval, grace time.Duration) *Reaper {
 	if interval <= 0 {
 		interval = DefaultReaperInterval
