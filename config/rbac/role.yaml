@@ -5,25 +5,6 @@ metadata:
   labels:
     app.kubernetes.io/name: cocoon-webhook
 rules:
-  # Pods feed a shared informer cache that backs the LeastUsedPicker
-  # (admission hot path) and the Reaper's pod-existence checks.
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
-
-  # Nodes feed a shared informer cache that backs the LeastUsedPicker
-  # node lookup, scoped by the cocoonstack.io/pool label.
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch"]
-
-  # The webhook owns one ConfigMap per cocoon node pool in
-  # cocoon-system; create / update / delete are needed for the
-  # ConfigMapStore + Reaper interaction.
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "create", "update", "patch", "delete"]
-
   # Scale-down validation needs to fetch the parent Deployment /
   # StatefulSet on /scale subresource UPDATEs because the Scale
   # object passed to the webhook does not carry the pod template

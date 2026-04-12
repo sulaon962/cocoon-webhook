@@ -8,31 +8,12 @@ cocoon-webhook hosts three admission endpoints:
 
 | Endpoint | Type | Resources | What it does |
 |---|---|---|---|
-| `POST /mutate` | Mutating | Pod CREATE | Reserves a stable VM name + a sticky cocoon node for cocoon-tolerated pods that are not owned by a CocoonSet. |
+| `POST /mutate` | Mutating | Pod CREATE | Rejects cocoon-tolerated pods that are not owned by a CocoonSet. CocoonSet-owned pods pass through unmutated. |
 | `POST /validate` | Validating | Deployment / StatefulSet UPDATE | Rejects scale-down on cocoon-tolerated workloads (agents are stateful VMs — use `CocoonHibernation` to suspend instead). |
 | `POST /validate-cocoonset` | Validating | CocoonSet CREATE / UPDATE | Catches the cross-field business rules the CRD's OpenAPI schema cannot express (image required, toolbox name uniqueness, static-mode prerequisites). |
 | `GET /healthz` | Liveness | — | Always 200 once the binary is running. |
 | `GET /readyz` | Readiness | — | 200 once dependencies needed to serve admission traffic are reachable. |
 | `GET /metrics` | Prometheus | — | Plain HTTP on `:9090`, separate from the admission TLS port. |
-
-## Sticky scheduling model
-
-The mutator answers two questions for every admitted pod:
-
-1. **Which VM name?** Derived deterministically from the deployment slot via `meta.VMNameForDeployment` (or the bare pod name via `meta.VMNameForPod`).
-2. **Which cocoon node?** The previously pinned node if there is one for that slot, otherwise picked from the pool by the least-used policy.
-
-State lives in one **per-pool** ConfigMap (`cocoon-affinity-<pool>`) in the `cocoon-system` namespace. Each entry is keyed by `<namespace>/<deployment>/<slot>` and the value is a JSON-encoded `Reservation`. Multiple webhook replicas race safely via `RetryOnConflict`.
-
-A background **Reaper** sweeps every per-pool ConfigMap on a 5-minute interval and releases reservations whose backing pod has been gone for more than 30 minutes.
-
-Pool selection looks at the pod in this order:
-1. `spec.nodeSelector["cocoonstack.io/pool"]`
-2. `metadata.labels["cocoonstack.io/pool"]`
-3. `metadata.annotations["cocoonstack.io/pool"]`
-4. `default`
-
-Cocoon nodes themselves opt into a pool by setting the `cocoonstack.io/pool=<name>` label.
 
 ## CocoonSet validation rules
 
@@ -57,8 +38,6 @@ The CRD ships with `+kubebuilder` enum / required / default markers, but the web
 | `TLS_KEY` | `/etc/cocoon/webhook/certs/tls.key` | TLS server private key |
 | `LISTEN_ADDR` | `:8443` | Admission listener (HTTPS) |
 | `METRICS_ADDR` | `:9090` | Prometheus listener (HTTP) |
-| `REAPER_INTERVAL` | `5m` | How often the reaper sweeps affinity ConfigMaps for orphan reservations |
-| `REAPER_GRACE` | `30m` | How long an orphan reservation is kept before release |
 
 ## Installation
 
@@ -70,7 +49,7 @@ kubectl apply -k github.com/cocoonstack/cocoon-webhook/config/default?ref=main
 
 This installs:
 - `cocoon-system` namespace
-- `ServiceAccount` + `ClusterRole` (read pods/nodes; full configmap CRUD in `cocoon-system`)
+- `ServiceAccount` + `ClusterRole` (read deployments/statefulsets for scale-down validation)
 - cert-manager `Issuer` + `Certificate` (`cocoon-webhook-tls`) — **cert-manager must already be installed in the cluster**
 - `Deployment` (2 replicas) + `Service` (port 443 → 8443, port 9090 → 9090)
 - `MutatingWebhookConfiguration` for Pod CREATE
