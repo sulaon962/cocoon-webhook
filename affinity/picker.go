@@ -13,7 +13,9 @@ import (
 	"github.com/cocoonstack/cocoon-common/meta"
 )
 
-const ByNodeIndex = "byNode"
+const (
+	ByNodeIndex = "byNode"
+)
 
 func NodeNameIndexFunc(obj any) ([]string, error) {
 	pod, ok := obj.(*corev1.Pod)
