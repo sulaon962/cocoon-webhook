@@ -41,7 +41,7 @@ The CRD ships with `+kubebuilder` enum / required / default markers, but the web
 - `spec.agent.image` must be set
 - `spec.agent.replicas >= 0`
 - `spec.agent.mode ∈ {clone, run}`
-- `spec.agent.os ∈ {linux, windows}`
+- `spec.agent.os ∈ {linux, windows, android}`
 - `spec.toolboxes[*].name` unique and matches RFC 1123
 - `spec.toolboxes[*]` static mode requires both `staticIP` and `staticVMID`
 - `spec.toolboxes[*]` non-static modes require `image`

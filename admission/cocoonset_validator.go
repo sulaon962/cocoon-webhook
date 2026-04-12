@@ -53,7 +53,7 @@ func validateCocoonSetSpec(cs *cocoonv1.CocoonSet) []string {
 		errs = append(errs, fmt.Sprintf("spec.agent.mode must be clone or run, got %q", cs.Spec.Agent.Mode))
 	}
 	if cs.Spec.Agent.OS != "" && !cs.Spec.Agent.OS.IsValid() {
-		errs = append(errs, fmt.Sprintf("spec.agent.os must be linux or windows, got %q", cs.Spec.Agent.OS))
+		errs = append(errs, fmt.Sprintf("spec.agent.os must be linux, windows, or android, got %q", cs.Spec.Agent.OS))
 	}
 
 	seen := map[string]bool{}
