@@ -54,6 +54,14 @@ func validateCocoonSetSpec(cs *cocoonv1.CocoonSet) []string {
 	}
 	errs = append(errs, validateVMOptions("spec.agent", cs.Spec.Agent.VMOptions, cs.Spec.Agent.Image)...)
 
+	// Firecracker restores the full memory snapshot on clone, freezing the
+	// guest network state (MAC + IP). Cross-node clones end up with an
+	// unreachable IP from the source node's DHCP pool. CH works around this
+	// via NIC hot-swap; FC has no equivalent. Force FC users to mode=run.
+	if cs.Spec.Agent.Backend.Default() == cocoonv1.BackendFirecracker && cs.Spec.Agent.Mode.Default() == cocoonv1.AgentModeClone {
+		errs = append(errs, "spec.agent: firecracker does not support clone mode, use mode=run instead")
+	}
+
 	seen := map[string]bool{}
 	agentBackend := cs.Spec.Agent.Backend.Default()
 	for i, tb := range cs.Spec.Toolboxes {
@@ -89,6 +97,9 @@ func validateCocoonSetSpec(cs *cocoonv1.CocoonSet) []string {
 			errs = append(errs, validateVMOptions(path, tb.VMOptions, tb.Image)...)
 			if tb.Backend.Default() != agentBackend {
 				errs = append(errs, fmt.Sprintf("%s.backend %q must match spec.agent.backend %q", path, tb.Backend.Default(), agentBackend))
+			}
+			if tb.Backend.Default() == cocoonv1.BackendFirecracker && tb.Mode.Default() == cocoonv1.ToolboxModeClone {
+				errs = append(errs, fmt.Sprintf("%s: firecracker does not support clone mode, use mode=run instead", path))
 			}
 		}
 	}

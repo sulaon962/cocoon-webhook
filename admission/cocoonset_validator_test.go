@@ -141,15 +141,60 @@ func TestValidateCocoonSetSpecAcceptsResourceQuantity(t *testing.T) {
 	}
 }
 
-func TestValidateCocoonSetSpecAcceptsFirecrackerOCI(t *testing.T) {
+func TestValidateCocoonSetSpecAcceptsFirecrackerOCIRun(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{
 			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			Mode:      cocoonv1.AgentModeRun,
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker, OS: cocoonv1.OSLinux},
 		},
 	}}
 	if errs := validateCocoonSetSpec(cs); len(errs) != 0 {
-		t.Errorf("firecracker + OCI should be valid, got %v", errs)
+		t.Errorf("firecracker + OCI + mode=run should be valid, got %v", errs)
+	}
+}
+
+func TestValidateCocoonSetSpecRejectsFirecrackerClone(t *testing.T) {
+	// Explicit clone
+	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
+		Agent: cocoonv1.AgentSpec{
+			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			Mode:      cocoonv1.AgentModeClone,
+			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
+		},
+	}}
+	if !containsErr(validateCocoonSetSpec(cs), "firecracker does not support clone mode") {
+		t.Errorf("expected fc+clone rejection")
+	}
+
+	// Default mode (empty → clone) should also be rejected
+	csDefault := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
+		Agent: cocoonv1.AgentSpec{
+			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
+		},
+	}}
+	if !containsErr(validateCocoonSetSpec(csDefault), "firecracker does not support clone mode") {
+		t.Errorf("expected fc+default-clone rejection")
+	}
+}
+
+func TestValidateCocoonSetSpecRejectsFirecrackerToolboxClone(t *testing.T) {
+	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
+		Agent: cocoonv1.AgentSpec{
+			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			Mode:      cocoonv1.AgentModeRun,
+			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
+		},
+		Toolboxes: []cocoonv1.ToolboxSpec{{
+			Name:      "aux",
+			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			Mode:      cocoonv1.ToolboxModeClone,
+			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
+		}},
+	}}
+	if !containsErr(validateCocoonSetSpec(cs), "firecracker does not support clone mode") {
+		t.Errorf("expected fc toolbox clone rejection")
 	}
 }
 
@@ -157,6 +202,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerWindows(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{
 			Image:     "ghcr.io/cocoonstack/cocoon/win:11",
+			Mode:      cocoonv1.AgentModeRun,
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker, OS: cocoonv1.OSWindows},
 		},
 	}}
@@ -169,6 +215,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerCloudimg(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{
 			Image:     "https://cloud-images.ubuntu.com/releases/jammy/release/ubuntu-22.04-server-cloudimg-amd64.img",
+			Mode:      cocoonv1.AgentModeRun,
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		},
 	}}
@@ -199,6 +246,7 @@ func TestValidateCocoonSetSpecRejectsToolboxBackendMismatch(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{
 			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			Mode:      cocoonv1.AgentModeRun,
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		},
 		Toolboxes: []cocoonv1.ToolboxSpec{{
@@ -216,6 +264,7 @@ func TestValidateCocoonSetSpecStaticToolboxSkipsBackend(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{
 			Image:     "ghcr.io/cocoonstack/cocoon/ubuntu:24.04",
+			Mode:      cocoonv1.AgentModeRun,
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		},
 		Toolboxes: []cocoonv1.ToolboxSpec{{
