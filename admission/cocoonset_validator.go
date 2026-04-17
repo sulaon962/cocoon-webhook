@@ -8,6 +8,7 @@ import (
 
 	"github.com/projecteru2/core/log"
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	cocoonv1 "github.com/cocoonstack/cocoon-common/apis/v1"
@@ -28,6 +29,19 @@ func (s *Server) validateCocoonSet(ctx context.Context, review *admissionv1.Admi
 	if err := json.Unmarshal(req.Object.Raw, &cs); err != nil {
 		logger.Warnf(ctx, "decode cocoonset %s/%s: %v", req.Namespace, req.Name, err)
 		return commonadmission.Deny(fmt.Sprintf("decode CocoonSet: %v", err))
+	}
+
+	// On UPDATE, skip spec validation when only metadata changed (e.g.
+	// finalizer patches during deletion). Without this, an invalid CR
+	// that slipped past an older webhook becomes undeletable because the
+	// operator's finalizer-removal patch is denied.
+	if req.Operation == admissionv1.Update && req.OldObject.Raw != nil {
+		var old cocoonv1.CocoonSet
+		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
+			logger.Warnf(ctx, "decode old cocoonset %s/%s: %v", req.Namespace, req.Name, err)
+		} else if specEqual(&cs, &old) {
+			return commonadmission.Allow()
+		}
 	}
 
 	if errs := validateCocoonSetSpec(&cs); len(errs) > 0 {
@@ -109,6 +123,11 @@ func validateCocoonSetSpec(cs *cocoonv1.CocoonSet) []string {
 	}
 
 	return errs
+}
+
+// specEqual reports whether two CocoonSets have identical specs.
+func specEqual(a, b *cocoonv1.CocoonSet) bool {
+	return equality.Semantic.DeepEqual(a.Spec, b.Spec)
 }
 
 // validateVMOptions validates shared VM knobs (OS / ConnType / Backend) plus

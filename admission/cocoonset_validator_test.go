@@ -280,6 +280,32 @@ func TestValidateCocoonSetSpecStaticToolboxSkipsBackend(t *testing.T) {
 	}
 }
 
+func TestSpecEqualDetectsMetadataOnlyChange(t *testing.T) {
+	base := cocoonv1.CocoonSet{
+		Spec: cocoonv1.CocoonSetSpec{
+			Agent: cocoonv1.AgentSpec{
+				Image:     "ghcr.io/x:1",
+				Mode:      cocoonv1.AgentModeClone,
+				VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
+			},
+		},
+	}
+
+	// Same spec, different metadata → specEqual=true
+	withFinalizer := base.DeepCopy()
+	withFinalizer.Finalizers = []string{"cocoonset.cocoonstack.io/finalizer"}
+	if !specEqual(&base, withFinalizer) {
+		t.Errorf("specEqual should return true when only metadata differs")
+	}
+
+	// Different spec → specEqual=false
+	diffSpec := base.DeepCopy()
+	diffSpec.Spec.Agent.Mode = cocoonv1.AgentModeRun
+	if specEqual(&base, diffSpec) {
+		t.Errorf("specEqual should return false when spec differs")
+	}
+}
+
 func containsErr(errs []string, sub string) bool {
 	for _, e := range errs {
 		if strings.Contains(e, sub) {
