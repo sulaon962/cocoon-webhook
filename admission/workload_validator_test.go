@@ -2,6 +2,7 @@ package admission
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -11,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/cocoonstack/cocoon-common/meta"
 )
@@ -127,6 +129,19 @@ func TestServerValidateWorkloadScaleSubresourceParentMissingAllowed(t *testing.T
 	resp := srv.validateWorkload(t.Context(), review)
 	if !resp.Allowed {
 		t.Errorf("missing parent should fail-open")
+	}
+}
+
+func TestServerValidateWorkloadScaleSubresourceAPIErrorDenied(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("get", "deployments", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("apiserver unavailable")
+	})
+	srv := NewServer(client)
+	review := buildScaleReview(t, "deployments", 5, 2)
+	resp := srv.validateWorkload(t.Context(), review)
+	if resp.Allowed {
+		t.Errorf("API error should fail-closed (deny), got allow")
 	}
 }
 

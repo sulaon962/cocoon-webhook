@@ -44,7 +44,7 @@ func (s *Server) validateWorkload(ctx context.Context, review *admissionv1.Admis
 }
 
 // validateScaleSubresource fetches the parent workload to check tolerations.
-// Fails open if the apiserver is unreachable.
+// Fails closed if the apiserver is unreachable.
 func (s *Server) validateScaleSubresource(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	logger := log.WithFunc("validateScaleSubresource")
 
@@ -58,7 +58,11 @@ func (s *Server) validateScaleSubresource(ctx context.Context, req *admissionv1.
 		return commonadmission.Allow()
 	}
 
-	tolerations, ok := s.fetchParentTolerations(ctx, req)
+	tolerations, ok, err := s.fetchParentTolerations(ctx, req)
+	if err != nil {
+		logger.Warnf(ctx, "fetch parent tolerations %s/%s: %v", req.Namespace, req.Name, err)
+		return commonadmission.Deny(fmt.Sprintf("cocoon-webhook: cannot verify parent workload: %v", err))
+	}
 	if !ok {
 		return commonadmission.Allow()
 	}
@@ -68,29 +72,31 @@ func (s *Server) validateScaleSubresource(ctx context.Context, req *admissionv1.
 	return checkScaleDown(ctx, req, oldScale.Spec.Replicas, newScale.Spec.Replicas)
 }
 
-func (s *Server) fetchParentTolerations(ctx context.Context, req *admissionv1.AdmissionRequest) ([]corev1.Toleration, bool) {
+func (s *Server) fetchParentTolerations(ctx context.Context, req *admissionv1.AdmissionRequest) ([]corev1.Toleration, bool, error) {
 	logger := log.WithFunc("fetchParentTolerations")
 	switch req.Resource.Resource {
 	case "deployments":
 		dep, err := s.client.AppsV1().Deployments(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
 		if err != nil {
-			if !apierrors.IsNotFound(err) {
-				logger.Warnf(ctx, "get parent Deployment %s/%s: %v", req.Namespace, req.Name, err)
+			if apierrors.IsNotFound(err) {
+				return nil, false, nil
 			}
-			return nil, false
+			logger.Warnf(ctx, "get parent Deployment %s/%s: %v", req.Namespace, req.Name, err)
+			return nil, false, fmt.Errorf("get parent deployment: %w", err)
 		}
-		return dep.Spec.Template.Spec.Tolerations, true
+		return dep.Spec.Template.Spec.Tolerations, true, nil
 	case "statefulsets":
 		sts, err := s.client.AppsV1().StatefulSets(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
 		if err != nil {
-			if !apierrors.IsNotFound(err) {
-				logger.Warnf(ctx, "get parent StatefulSet %s/%s: %v", req.Namespace, req.Name, err)
+			if apierrors.IsNotFound(err) {
+				return nil, false, nil
 			}
-			return nil, false
+			logger.Warnf(ctx, "get parent StatefulSet %s/%s: %v", req.Namespace, req.Name, err)
+			return nil, false, fmt.Errorf("get parent statefulset: %w", err)
 		}
-		return sts.Spec.Template.Spec.Tolerations, true
+		return sts.Spec.Template.Spec.Tolerations, true, nil
 	default:
-		return nil, false
+		return nil, false, nil
 	}
 }
 

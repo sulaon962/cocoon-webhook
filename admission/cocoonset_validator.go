@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/projecteru2/core/log"
@@ -86,6 +87,9 @@ func validateCocoonSetSpec(cs *cocoonv1.CocoonSet) []string {
 		}
 		if vErrs := validation.IsDNS1123Label(tb.Name); len(vErrs) > 0 {
 			errs = append(errs, fmt.Sprintf("%s.name %q must match RFC 1123 label: %s", path, tb.Name, strings.Join(vErrs, "; ")))
+		}
+		if _, err := strconv.Atoi(tb.Name); err == nil {
+			errs = append(errs, fmt.Sprintf("%s.name %q must not be purely numeric (conflicts with agent slot naming)", path, tb.Name))
 		}
 		if seen[tb.Name] {
 			errs = append(errs, fmt.Sprintf("%s.name %q duplicates an earlier toolbox", path, tb.Name))

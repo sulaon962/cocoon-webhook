@@ -80,6 +80,19 @@ func TestValidateCocoonSetSpecRejectsBadToolboxName(t *testing.T) {
 	}
 }
 
+func TestValidateCocoonSetSpecRejectsNumericToolboxName(t *testing.T) {
+	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
+		Agent: cocoonv1.AgentSpec{Image: "x"},
+		Toolboxes: []cocoonv1.ToolboxSpec{
+			{Name: "0", Image: "y"},
+		},
+	}}
+	errs := validateCocoonSetSpec(cs)
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "must not be purely numeric") }) {
+		t.Errorf("expected numeric name error, got %v", errs)
+	}
+}
+
 func TestValidateCocoonSetSpecStaticToolboxRequiresHints(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{Image: "x"},
