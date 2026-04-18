@@ -234,19 +234,21 @@ func allocateSlot(entries []Reservation, namespace, deployment, podName string) 
 }
 
 func lookupExistingNode(entries []Reservation, namespace, deployment string, slot int) string {
-	for _, e := range entries {
-		if e.Namespace == namespace && e.Deployment == deployment && e.Slot == slot {
-			return e.Node
-		}
+	idx := slices.IndexFunc(entries, func(e Reservation) bool {
+		return e.Namespace == namespace && e.Deployment == deployment && e.Slot == slot
+	})
+	if idx < 0 {
+		return ""
 	}
-	return ""
+	return entries[idx].Node
 }
 
 func findExistingReservation(entries []Reservation, namespace, deployment, podName string) (Reservation, bool) {
-	for _, e := range entries {
-		if e.Namespace == namespace && e.Deployment == deployment && e.Pod == podName {
-			return e, true
-		}
+	idx := slices.IndexFunc(entries, func(e Reservation) bool {
+		return e.Namespace == namespace && e.Deployment == deployment && e.Pod == podName
+	})
+	if idx < 0 {
+		return Reservation{}, false
 	}
-	return Reservation{}, false
+	return entries[idx], true
 }

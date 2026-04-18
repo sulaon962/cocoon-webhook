@@ -1,6 +1,7 @@
 package admission
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestValidateCocoonSetSpecAcceptsMinimal(t *testing.T) {
 func TestValidateCocoonSetSpecRejectsMissingImage(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "spec.agent.image") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "spec.agent.image") }) {
 		t.Errorf("expected agent.image error, got %v", errs)
 	}
 }
@@ -37,7 +38,7 @@ func TestValidateCocoonSetSpecRejectsNegativeReplicas(t *testing.T) {
 		Agent: cocoonv1.AgentSpec{Image: "x", Replicas: -1},
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "replicas must be >= 0") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "replicas must be >= 0") }) {
 		t.Errorf("expected replicas error, got %v", errs)
 	}
 }
@@ -47,7 +48,7 @@ func TestValidateCocoonSetSpecRejectsBadMode(t *testing.T) {
 		Agent: cocoonv1.AgentSpec{Image: "x", Mode: "ouija"},
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "agent.mode") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "agent.mode") }) {
 		t.Errorf("expected mode error, got %v", errs)
 	}
 }
@@ -61,7 +62,7 @@ func TestValidateCocoonSetSpecRejectsDuplicateToolboxNames(t *testing.T) {
 		},
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "duplicates an earlier toolbox") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "duplicates an earlier toolbox") }) {
 		t.Errorf("expected duplicate toolbox error, got %v", errs)
 	}
 }
@@ -74,7 +75,7 @@ func TestValidateCocoonSetSpecRejectsBadToolboxName(t *testing.T) {
 		},
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "RFC 1123") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "RFC 1123") }) {
 		t.Errorf("expected RFC 1123 error, got %v", errs)
 	}
 }
@@ -87,10 +88,10 @@ func TestValidateCocoonSetSpecStaticToolboxRequiresHints(t *testing.T) {
 		},
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "staticIP") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "staticIP") }) {
 		t.Errorf("expected staticIP error, got %v", errs)
 	}
-	if !containsErr(errs, "staticVMID") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "staticVMID") }) {
 		t.Errorf("expected staticVMID error, got %v", errs)
 	}
 }
@@ -115,7 +116,7 @@ func TestValidateCocoonSetSpecNonStaticToolboxRequiresImage(t *testing.T) {
 		},
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "image is required") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "image is required") }) {
 		t.Errorf("expected image error, got %v", errs)
 	}
 }
@@ -126,7 +127,7 @@ func TestValidateCocoonSetSpecBadSnapshotPolicy(t *testing.T) {
 		SnapshotPolicy: "every-tuesday",
 	}}
 	errs := validateCocoonSetSpec(cs)
-	if !containsErr(errs, "snapshotPolicy") {
+	if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, "snapshotPolicy") }) {
 		t.Errorf("expected snapshotPolicy error, got %v", errs)
 	}
 }
@@ -163,7 +164,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerClone(t *testing.T) {
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "firecracker does not support clone mode") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool { return strings.Contains(e, "firecracker does not support clone mode") }) {
 		t.Errorf("expected fc+clone rejection")
 	}
 
@@ -174,7 +175,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerClone(t *testing.T) {
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		},
 	}}
-	if !containsErr(validateCocoonSetSpec(csDefault), "firecracker does not support clone mode") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(csDefault), func(e string) bool { return strings.Contains(e, "firecracker does not support clone mode") }) {
 		t.Errorf("expected fc+default-clone rejection")
 	}
 }
@@ -193,7 +194,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerToolboxClone(t *testing.T) {
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		}},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "firecracker does not support clone mode") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool { return strings.Contains(e, "firecracker does not support clone mode") }) {
 		t.Errorf("expected fc toolbox clone rejection")
 	}
 }
@@ -206,7 +207,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerWindows(t *testing.T) {
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker, OS: cocoonv1.OSWindows},
 		},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "firecracker does not support Windows") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool { return strings.Contains(e, "firecracker does not support Windows") }) {
 		t.Errorf("expected fc+windows rejection")
 	}
 }
@@ -219,7 +220,7 @@ func TestValidateCocoonSetSpecRejectsFirecrackerCloudimg(t *testing.T) {
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendFirecracker},
 		},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "cloudimg URLs are not supported") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool { return strings.Contains(e, "cloudimg URLs are not supported") }) {
 		t.Errorf("expected fc+cloudimg URL rejection")
 	}
 }
@@ -228,7 +229,7 @@ func TestValidateCocoonSetSpecRejectsBadBackend(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{Image: "x", VMOptions: cocoonv1.VMOptions{Backend: "qemu"}},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "backend must be cloud-hypervisor or firecracker") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool { return strings.Contains(e, "backend must be cloud-hypervisor or firecracker") }) {
 		t.Errorf("expected backend enum rejection")
 	}
 }
@@ -237,7 +238,7 @@ func TestValidateCocoonSetSpecRejectsBadConnType(t *testing.T) {
 	cs := &cocoonv1.CocoonSet{Spec: cocoonv1.CocoonSetSpec{
 		Agent: cocoonv1.AgentSpec{Image: "x", VMOptions: cocoonv1.VMOptions{ConnType: "telnet"}},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "connType must be ssh") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool { return strings.Contains(e, "connType must be ssh") }) {
 		t.Errorf("expected connType enum rejection")
 	}
 }
@@ -255,7 +256,9 @@ func TestValidateCocoonSetSpecRejectsToolboxBackendMismatch(t *testing.T) {
 			VMOptions: cocoonv1.VMOptions{Backend: cocoonv1.BackendCloudHypervisor},
 		}},
 	}}
-	if !containsErr(validateCocoonSetSpec(cs), "backend \"cloud-hypervisor\" must match spec.agent.backend \"firecracker\"") {
+	if !slices.ContainsFunc(validateCocoonSetSpec(cs), func(e string) bool {
+		return strings.Contains(e, "backend \"cloud-hypervisor\" must match spec.agent.backend \"firecracker\"")
+	}) {
 		t.Errorf("expected toolbox backend mismatch rejection, got %v", validateCocoonSetSpec(cs))
 	}
 }
@@ -304,13 +307,4 @@ func TestSpecEqualDetectsMetadataOnlyChange(t *testing.T) {
 	if specEqual(&base, diffSpec) {
 		t.Errorf("specEqual should return false when spec differs")
 	}
-}
-
-func containsErr(errs []string, sub string) bool {
-	for _, e := range errs {
-		if strings.Contains(e, sub) {
-			return true
-		}
-	}
-	return false
 }
