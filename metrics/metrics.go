@@ -78,6 +78,8 @@ func RecordAdmission(handler, decision string) {
 }
 
 // RecordReservation increments the reservation counter for the given pool.
+// Registered and exposed via /metrics, but not yet incremented by any caller;
+// wiring for the affinity reservation path is TBD.
 func RecordReservation(pool string) {
 	affinityReservations.WithLabelValues(pool).Inc()
 }

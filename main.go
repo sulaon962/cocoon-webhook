@@ -72,6 +72,6 @@ func main() {
 		commonhttpx.HTTPServerSpec(metricsServer),
 	}
 	if err := commonhttpx.Run(ctx, shutdownTimeout, specs...); err != nil {
-		logger.Errorf(ctx, err, "run servers")
+		logger.Error(ctx, err, "run servers")
 	}
 }
