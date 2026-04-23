@@ -10,11 +10,6 @@ webhooks:
     sideEffects: None
     failurePolicy: Ignore
     timeoutSeconds: 5
-    objectSelector:
-      matchExpressions:
-        - key: cocoonset.cocoonstack.io/managed
-          operator: NotIn
-          values: ["false"]
     rules:
       - apiGroups: [""]
         apiVersions: ["v1"]

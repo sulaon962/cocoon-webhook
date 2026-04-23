@@ -9,10 +9,10 @@ cocoon-webhook hosts three admission endpoints:
 | Endpoint | Type | Resources | What it does |
 |---|---|---|---|
 | `POST /mutate` | Mutating | Pod CREATE | Rejects cocoon-tolerated pods that are not owned by a CocoonSet. CocoonSet-owned pods pass through unmutated. |
-| `POST /validate` | Validating | Deployment / StatefulSet UPDATE | Rejects scale-down on cocoon-tolerated workloads (agents are stateful VMs — use `CocoonHibernation` to suspend instead). |
+| `POST /validate` | Validating | Deployment / StatefulSet UPDATE | Rejects scale-down on cocoon-tolerated workloads. Bypass path for hand-rolled Deployments/StatefulSets carrying the cocoon toleration — the CocoonSet main flow creates Pods directly and does not traverse this endpoint. |
 | `POST /validate-cocoonset` | Validating | CocoonSet CREATE / UPDATE | Catches the cross-field business rules the CRD's OpenAPI schema cannot express (image required, toolbox name uniqueness, static-mode prerequisites). |
 | `GET /healthz` | Liveness | — | Always 200 once the binary is running. |
-| `GET /readyz` | Readiness | — | 200 once dependencies needed to serve admission traffic are reachable. |
+| `GET /readyz` | Readiness | — | Always 200 once the binary is running (liveness-equivalent stub; does not probe apiserver reachability). |
 | `GET /metrics` | Prometheus | — | Plain HTTP on `:9090`, separate from the admission TLS port. |
 
 ## CocoonSet validation rules
